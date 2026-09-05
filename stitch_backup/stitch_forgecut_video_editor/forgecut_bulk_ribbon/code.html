@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>ForgeCut - Bulk Production</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@100..900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "secondary": "#5c5f60",
+                        "on-surface": "#181c22",
+                        "surface-container-low": "#f1f3fc",
+                        "on-error": "#ffffff",
+                        "on-secondary-container": "#606365",
+                        "surface-bright": "#f8f9ff",
+                        "on-primary-fixed-variant": "#004883",
+                        "on-error-container": "#93000a",
+                        "secondary-container": "#dee0e2",
+                        "outline": "#717783",
+                        "primary-fixed-dim": "#a3c9ff",
+                        "surface-dim": "#d7dae2",
+                        "inverse-primary": "#a3c9ff",
+                        "surface-container-highest": "#e0e2ea",
+                        "primary": "#005faa",
+                        "tertiary": "#974700",
+                        "on-primary-fixed": "#001c39",
+                        "on-secondary-fixed-variant": "#444749",
+                        "on-primary": "#ffffff",
+                        "error-container": "#ffdad6",
+                        "tertiary-container": "#bc5b00",
+                        "on-tertiary": "#ffffff",
+                        "inverse-on-surface": "#eef0f9",
+                        "surface": "#f8f9ff",
+                        "on-background": "#181c22",
+                        "primary-fixed": "#d3e3ff",
+                        "on-secondary-fixed-variant": "#444749",
+                        "outline-variant": "#c0c7d4",
+                        "on-primary-container": "#ffffff",
+                        "on-tertiary-fixed": "#311300",
+                        "background": "#f8f9ff",
+                        "surface-variant": "#e0e2ea",
+                        "on-secondary": "#ffffff",
+                        "surface-container-lowest": "#ffffff",
+                        "on-secondary-fixed": "#191c1e",
+                        "secondary-fixed": "#e1e2e4",
+                        "on-tertiary-container": "#ffffff",
+                        "primary-container": "#0078d4",
+                        "inverse-surface": "#2d3137",
+                        "surface-tint": "#0060ab",
+                        "tertiary-fixed-dim": "#ffb689",
+                        "error": "#ba1a1a",
+                        "tertiary-fixed": "#ffdbc8",
+                        "surface-container": "#ebeef6",
+                        "on-surface-variant": "#404752",
+                        "surface-container-high": "#e6e8f0",
+                        "secondary-fixed-dim": "#c5c7c8"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "ribbon_height": "140px",
+                        "element_gap": "8px",
+                        "export_queue_width": "320px",
+                        "panel_padding": "16px",
+                        "gutter": "1px",
+                        "timeline_height": "300px",
+                        "sidebar_width": "240px",
+                        "ribbon_group_padding": "12px"
+                    },
+                    "fontFamily": {
+                        "timeline-timecode": ["Libre Franklin"],
+                        "label-sm": ["Libre Franklin"],
+                        "ribbon-tab": ["Libre Franklin"],
+                        "panel-header": ["Libre Franklin"],
+                        "body-md": ["Libre Franklin"],
+                        "status-bar": ["Libre Franklin"],
+                        "ribbon-group-label": ["Libre Franklin"]
+                    },
+                    "fontSize": {
+                        "timeline-timecode": ["11px", {"lineHeight": "14px", "letterSpacing": "0.05em", "fontWeight": "400"}],
+                        "label-sm": ["12px", {"lineHeight": "16px", "fontWeight": "400"}],
+                        "ribbon-tab": ["14px", {"lineHeight": "20px", "fontWeight": "500"}],
+                        "panel-header": ["14px", {"lineHeight": "24px", "fontWeight": "600"}],
+                        "body-md": ["13px", {"lineHeight": "18px", "fontWeight": "400"}],
+                        "status-bar": ["11px", {"lineHeight": "16px", "fontWeight": "400"}],
+                        "ribbon-group-label": ["11px", {"lineHeight": "16px", "letterSpacing": "0.02em", "fontWeight": "400"}]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            display: inline-block;
+            line-height: 1;
+            text-transform: none;
+            letter-spacing: normal;
+            word-wrap: normal;
+            white-space: nowrap;
+            direction: ltr;
+        }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #c0c7d4; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #717783; }
+        .ribbon-button-large {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 8px;
+            min-width: 64px;
+            height: 84px;
+            gap: 4px;
+        }
+    </style>
+</head>
+<body class="bg-surface text-on-surface font-body-md text-body-md overflow-hidden h-screen flex flex-col">
+<!-- Top Bar & Ribbon Shell -->
+<header class="flex flex-col w-full bg-surface dark:bg-surface-dim border-b border-outline-variant dark:border-outline">
+<!-- Title Bar -->
+<div class="flex justify-between items-center px-4 py-1 h-8">
+<div class="flex items-center gap-4">
+<span class="font-panel-header text-panel-header font-bold text-on-surface">ForgeCut</span>
+<div class="flex gap-2">
+<span class="text-xs px-2 py-0.5 bg-primary-container text-on-primary-container rounded">Bulk Mode</span>
+</div>
+</div>
+<div class="flex gap-4">
+<span class="material-symbols-outlined text-on-surface-variant cursor-pointer text-lg">settings</span>
+<span class="material-symbols-outlined text-on-surface-variant cursor-pointer text-lg">help</span>
+<span class="material-symbols-outlined text-on-surface-variant cursor-pointer text-lg">minimize</span>
+<span class="material-symbols-outlined text-on-surface-variant cursor-pointer text-lg">close</span>
+</div>
+</div>
+<!-- Ribbon Tabs -->
+<nav class="flex px-4 gap-6 h-9 items-center overflow-x-auto border-b border-outline-variant/30">
+<a class="text-on-surface-variant hover:text-on-surface transition-colors font-ribbon-tab text-ribbon-tab px-1" href="#">File</a>
+<a class="text-on-surface-variant hover:text-on-surface transition-colors font-ribbon-tab text-ribbon-tab px-1" href="#">Home</a>
+<a class="text-on-surface-variant hover:text-on-surface transition-colors font-ribbon-tab text-ribbon-tab px-1" href="#">Insert</a>
+<a class="text-primary dark:text-inverse-primary border-b-2 border-primary dark:border-inverse-primary font-bold font-ribbon-tab text-ribbon-tab px-1 h-full flex items-center" href="#">Bulk Production</a>
+<a class="text-on-surface-variant hover:text-on-surface transition-colors font-ribbon-tab text-ribbon-tab px-1" href="#">Review</a>
+<a class="text-on-surface-variant hover:text-on-surface transition-colors font-ribbon-tab text-ribbon-tab px-1" href="#">Help</a>
+</nav>
+<!-- Ribbon Contents (Bulk Context) -->
+<div class="flex h-[100px] bg-white dark:bg-surface-dim p-1 gap-1 items-stretch overflow-hidden">
+<!-- Group: CSV -->
+<div class="flex flex-col border-r border-outline-variant/50 pr-2">
+<div class="flex flex-1 gap-1 items-center">
+<button class="ribbon-button-large hover:bg-surface-container-high transition-colors rounded">
+<span class="material-symbols-outlined text-3xl text-primary">upload_file</span>
+<span class="font-label-sm text-label-sm text-center leading-tight">Import<br/>CSV</span>
+</button>
+<button class="ribbon-button-large hover:bg-surface-container-high transition-colors rounded">
+<span class="material-symbols-outlined text-3xl text-secondary">view_column</span>
+<span class="font-label-sm text-label-sm text-center leading-tight">Map<br/>Columns</span>
+</button>
+<button class="ribbon-button-large hover:bg-surface-container-high transition-colors rounded">
+<span class="material-symbols-outlined text-3xl text-tertiary">fact_check</span>
+<span class="font-label-sm text-label-sm text-center leading-tight">Validate</span>
+</button>
+</div>
+<div class="text-center font-ribbon-group-label text-ribbon-group-label text-on-surface-variant pb-1">CSV</div>
+</div>
+<!-- Group: Preview -->
+<div class="flex flex-col border-r border-outline-variant/50 px-2">
+<div class="flex flex-1 gap-1 items-center">
+<button class="ribbon-button-large hover:bg-surface-container-high transition-colors rounded">
+<span class="material-symbols-outlined text-3xl text-primary">science</span>
+<span class="font-label-sm text-label-sm text-center leading-tight">Generate<br/>Sample</span>
+</button>
+<button class="ribbon-button-large hover:bg-surface-container-high transition-colors rounded">
+<span class="material-symbols-outlined text-3xl text-secondary">collections</span>
+<span class="font-label-sm text-label-sm text-center leading-tight">Preview<br/>Variations</span>
+</button>
+</div>
+<div class="text-center font-ribbon-group-label text-ribbon-group-label text-on-surface-variant pb-1">Preview</div>
+</div>
+<!-- Group: Queue -->
+<div class="flex flex-col px-2">
+<div class="flex flex-1 gap-1 items-center">
+<button class="ribbon-button-large bg-primary/10 hover:bg-primary/20 transition-colors rounded border border-primary/20">
+<span class="material-symbols-outlined text-3xl text-primary" style="font-variation-settings: 'FILL' 1;">play_circle</span>
+<span class="font-label-sm text-label-sm text-center leading-tight font-bold">Generate<br/>Batch</span>
+</button>
+<div class="flex flex-col gap-1 justify-center px-2">
+<button class="flex items-center gap-2 hover:bg-surface-container-high px-2 py-1 rounded w-full">
+<span class="material-symbols-outlined text-lg text-secondary">replay</span>
+<span class="font-label-sm text-label-sm whitespace-nowrap">Retry Failed</span>
+</button>
+<button class="flex items-center gap-2 hover:bg-surface-container-high px-2 py-1 rounded w-full text-error">
+<span class="material-symbols-outlined text-lg">cancel</span>
+<span class="font-label-sm text-label-sm whitespace-nowrap">Cancel All</span>
+</button>
+</div>
+<button class="ribbon-button-large hover:bg-surface-container-high transition-colors rounded">
+<span class="material-symbols-outlined text-3xl text-tertiary">output</span>
+<span class="font-label-sm text-label-sm text-center leading-tight">Export<br/>All</span>
+</button>
+</div>
+<div class="text-center font-ribbon-group-label text-ribbon-group-label text-on-surface-variant pb-1">Queue Management</div>
+</div>
+</div>
+</header>
+<!-- Main Workspace Area -->
+<main class="flex flex-1 overflow-hidden relative">
+<!-- Left Sidebar: Project Explorer -->
+<aside class="w-sidebar_width flex flex-col bg-surface-container-low border-r border-outline-variant shrink-0">
+<div class="p-panel_padding flex justify-between items-center border-b border-outline-variant/30">
+<h3 class="font-panel-header text-panel-header font-semibold text-on-surface">Project Assets</h3>
+<span class="material-symbols-outlined text-lg cursor-pointer">add</span>
+</div>
+<div class="flex-1 overflow-y-auto p-panel_padding space-y-4">
+<div>
+<span class="font-label-sm text-label-sm uppercase tracking-wider text-on-surface-variant font-bold">Imported CSVs</span>
+<div class="mt-2 space-y-1">
+<div class="flex items-center gap-2 p-2 bg-primary-container text-on-primary-container rounded-lg cursor-pointer">
+<span class="material-symbols-outlined text-lg">table_chart</span>
+<span class="font-label-sm text-label-sm truncate">campaign_v1.csv</span>
+</div>
+<div class="flex items-center gap-2 p-2 hover:bg-surface-container-highest transition-colors rounded-lg cursor-pointer text-on-surface-variant">
+<span class="material-symbols-outlined text-lg">table_chart</span>
+<span class="font-label-sm text-label-sm truncate">test_data.csv</span>
+</div>
+</div>
+</div>
+<div>
+<span class="font-label-sm text-label-sm uppercase tracking-wider text-on-surface-variant font-bold">Media Bin</span>
+<div class="mt-2 grid grid-cols-2 gap-2">
+<div class="aspect-square bg-surface-container-highest rounded border border-outline-variant relative overflow-hidden">
+<img class="object-cover w-full h-full" data-alt="A professional stock photo of a high-end cinematic lens focusing on a blurred studio background, highlighting tech and production quality. The lighting is cold blue and crisp, fitting a corporate video editor aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCLBioNXqV-COF86K8ZQ-1bEIiUb8EkvWpGU8d-8_RB7HMXl8-Cp8BeZ9ZWvEWfM2iTFZ7kxSJ2LbbaPIWeCUq8g8TttzrrHVMLLDxXBFh3_7WM0Bc_28RT0Ww-6xmPvFYJjdGHajWRM1pINqRfwLicEu3qdhVYCP9tQTwvzHPyD-kOGcev6iQ-zTazJtHRGuYe3sdqgEvNxzljVsbzM5ewahjxapdvUtpK1aJZprAAscam6GyqgE8J"/>
+</div>
+<div class="aspect-square bg-surface-container-highest rounded border border-outline-variant relative overflow-hidden">
+<img class="object-cover w-full h-full" data-alt="Abstract colorful light leaks across a dark movie studio background, featuring deep teals and sharp oranges. High-quality production asset aesthetic, clean and modern for a UI design." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBQIAwk3xB0Fez5dkpUpfA5SkJi8DjkPNILLUOxLsyrg6aPUYZv1c7yyoTpxAGFSrtNVJLFqbd3XeQu9zIUCrHyh5-sQavIDHUnRpmR-vk58rDP81Qi6zr3e1ttRX81lHBjt0OI1E_iD3cIyUHGrfl5H4btX4uwLzxdMQP7bfRLWUdeG-eo4nWWH6CftAgkfWS5DdOXCZwfQDpMlX0yMp7nQDv_v3xQr6am6ii0ckmfo_hXAiNygizQ"/>
+</div>
+</div>
+</div>
+</div>
+</aside>
+<!-- Center Column: Preview & Timeline -->
+<div class="flex flex-col flex-1 min-w-0 bg-[#F5F6F8]">
+<!-- Preview Canvas -->
+<div class="flex-1 flex flex-col p-6 items-center justify-center relative overflow-hidden">
+<div class="aspect-video w-full max-w-4xl bg-black shadow-2xl rounded relative flex items-center justify-center overflow-hidden border border-outline-variant">
+<img class="w-full h-full object-cover opacity-60" data-alt="A cinematic 4K video frame featuring a modern minimalist office space with a floating digital text overlay that says 'Limited Time Offer'. The style is sleek, bright, and professional, characteristic of a high-production bulk advertisement template." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCaKCQwcpSuUHDZ-W1MUwGjB1WyrBm48N8LR4QpwZirPKZc_EHKTgfQ5w98MU2wele_K7NnTo6tqoJcYfpatPYptj7x0oiKrn7AGUEGK6bam2oYrJggMyfAOBwfmBdKb6hY6lzpwScluU_eu00wLtBzY2UxEYtMp8BRoFPh4dbEaMRUL3aX5YKL8OltLXwy_4A1h9-H9p_4MymTpX1fweqyDHMG3Wco-IDBT_HgCU2xYC_0oz3yHYHL"/>
+<!-- Canvas UI Overlays -->
+<div class="absolute top-4 left-4 bg-black/50 backdrop-blur text-white px-2 py-1 text-xs rounded border border-white/20">
+                        Row 14: Seasonal_Promo_01
+                    </div>
+<div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+<div class="w-2/3 h-1/4 border-2 border-primary/50 border-dashed rounded flex items-center justify-center">
+<span class="text-white font-bold tracking-widest uppercase text-xl opacity-80">Dynamic Text Area</span>
+</div>
+</div>
+<!-- Transport Controls -->
+<div class="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-6 bg-black/40 backdrop-blur-md px-6 py-2 rounded-full border border-white/10">
+<span class="material-symbols-outlined text-white cursor-pointer hover:text-primary">skip_previous</span>
+<span class="material-symbols-outlined text-white text-4xl cursor-pointer hover:text-primary" style="font-variation-settings: 'FILL' 1;">play_arrow</span>
+<span class="material-symbols-outlined text-white cursor-pointer hover:text-primary">skip_next</span>
+</div>
+</div>
+<div class="mt-4 flex items-center gap-4 bg-white px-4 py-2 rounded-full shadow-sm border border-outline-variant">
+<span class="font-timeline-timecode text-timeline-timecode text-on-surface-variant">00:00:14:02</span>
+<div class="w-48 h-1 bg-surface-container rounded-full relative">
+<div class="absolute inset-y-0 left-0 w-1/3 bg-primary rounded-full"></div>
+</div>
+<span class="font-timeline-timecode text-timeline-timecode text-on-surface-variant">00:00:30:00</span>
+</div>
+</div>
+<!-- Bottom: Timeline -->
+<div class="h-timeline_height bg-white border-t border-outline-variant flex flex-col">
+<div class="flex items-center h-10 border-b border-outline-variant px-panel_padding justify-between">
+<div class="flex gap-4">
+<button class="flex items-center gap-1 text-on-surface-variant font-bold border-b-2 border-primary pb-1">
+<span class="material-symbols-outlined text-sm">reorder</span>
+<span class="text-xs uppercase tracking-tighter">Timeline</span>
+</button>
+<button class="flex items-center gap-1 text-on-surface-variant pb-1 opacity-50">
+<span class="material-symbols-outlined text-sm">analytics</span>
+<span class="text-xs uppercase tracking-tighter">Batch Logs</span>
+</button>
+</div>
+<div class="flex gap-2">
+<span class="material-symbols-outlined text-lg text-on-surface-variant">zoom_in</span>
+<span class="material-symbols-outlined text-lg text-on-surface-variant">zoom_out</span>
+</div>
+</div>
+<div class="flex-1 flex overflow-hidden">
+<!-- Track Headers -->
+<div class="w-48 border-r border-outline-variant shrink-0 bg-surface-container-low">
+<div class="h-10 border-b border-outline-variant/30 flex items-center px-4 bg-surface-container">
+<span class="text-[10px] font-bold text-on-surface-variant uppercase">Tracks</span>
+</div>
+<div class="space-y-gutter">
+<div class="h-12 border-b border-outline-variant/10 flex items-center justify-between px-4 bg-white">
+<span class="text-xs font-semibold">Video 1</span>
+<div class="flex gap-1">
+<span class="material-symbols-outlined text-xs">visibility</span>
+<span class="material-symbols-outlined text-xs">lock</span>
+</div>
+</div>
+<div class="h-12 border-b border-outline-variant/10 flex items-center justify-between px-4 bg-white">
+<span class="text-xs font-semibold">Dynamic Text</span>
+<div class="flex gap-1">
+<span class="material-symbols-outlined text-xs">visibility</span>
+<span class="material-symbols-outlined text-xs">lock</span>
+</div>
+</div>
+<div class="h-12 border-b border-outline-variant/10 flex items-center justify-between px-4 bg-white">
+<span class="text-xs font-semibold">Audio 1</span>
+<div class="flex gap-1">
+<span class="material-symbols-outlined text-xs">volume_up</span>
+<span class="material-symbols-outlined text-xs">lock</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Track Area -->
+<div class="flex-1 relative bg-surface-container-lowest overflow-x-auto">
+<!-- Playhead -->
+<div class="absolute left-1/3 top-0 bottom-0 w-[1px] bg-primary z-10 shadow-[0_0_10px_rgba(0,120,212,0.3)]">
+<div class="absolute -top-1 -left-1.5 w-3 h-3 bg-primary rounded-full border-2 border-white shadow"></div>
+</div>
+<!-- Grid -->
+<div class="absolute inset-0 grid grid-cols-12 pointer-events-none opacity-5">
+<div class="border-r border-on-surface h-full"></div>
+<div class="border-r border-on-surface h-full"></div>
+<div class="border-r border-on-surface h-full"></div>
+<div class="border-r border-on-surface h-full"></div>
+<div class="border-r border-on-surface h-full"></div>
+<div class="border-r border-on-surface h-full"></div>
+<div class="border-r border-on-surface h-full"></div>
+<div class="border-r border-on-surface h-full"></div>
+<div class="border-r border-on-surface h-full"></div>
+<div class="border-r border-on-surface h-full"></div>
+<div class="border-r border-on-surface h-full"></div>
+<div class="border-r border-on-surface h-full"></div>
+</div>
+<!-- Clips -->
+<div class="space-y-gutter mt-10">
+<div class="h-12 bg-primary/20 border-y border-primary/30 w-3/4 rounded-r px-2 flex items-center gap-2">
+<img class="w-8 h-8 rounded object-cover" data-alt="A microscopic, colorful cinematic close-up of ink swirling in water, creating professional organic motion patterns. The lighting is dramatic and fits the professional high-end look of a video asset used in a modern editor." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBU7GG7Wdeo9BXaiPvD1hcw3FaBfF9vMnBO0GLKeoeUCrmbQeb84LeXnORbt5WTryOQZJrQZ9NgqF5c9XVd1RRXau53qd95pCD8OnFtHTV8Xr5080ZVy_KUoJrk6QEVIreQXeIA_sLDuv5BU3XsL3owT1t1NhkhkpiWqJYS892N-NNW6SlGlH8kir99z8b-7Fr8Vkf79Y9rznsE8zHXauPPccrgI4GbvUdNBaLIgcE5L4o4g9KJiT-D"/>
+<span class="text-[10px] font-bold text-primary truncate">bg_main_asset_04.mp4</span>
+</div>
+<div class="h-12 bg-tertiary/20 border-y border-tertiary/30 w-1/2 ml-[20%] rounded px-2 flex items-center gap-2">
+<span class="material-symbols-outlined text-sm text-tertiary">title</span>
+<span class="text-[10px] font-bold text-tertiary truncate">{CSV_COLUMN_TITLE}</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Right Sidebar: Export Queue -->
+<aside class="w-export_queue_width flex flex-col bg-white border-l border-outline-variant shrink-0">
+<div class="p-panel_padding border-b border-outline-variant/30 flex justify-between items-center">
+<h3 class="font-panel-header text-panel-header font-semibold text-on-surface">Export Queue</h3>
+<span class="text-[10px] px-2 py-0.5 bg-secondary-container text-on-secondary-container rounded font-bold uppercase">12 Pending</span>
+</div>
+<div class="flex-1 overflow-y-auto p-3 space-y-3">
+<!-- Queue Item 1 -->
+<div class="group border border-primary bg-primary-container/10 rounded overflow-hidden relative">
+<div class="flex p-2 gap-3">
+<div class="w-20 h-12 bg-black rounded shrink-0 relative">
+<img class="w-full h-full object-cover" data-alt="A blurred video thumbnail showing a bright modern living room with text overlay for a real estate campaign. The look is corporate, clean, and optimistic, using soft sunlight and white furniture." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAec_i4SyiowyPWWn2uyM1U4ThLYO_tP3ivqMAuaXpwrOwiflmL4OkfkIN7gVDIqXuooGHXT4laKEzhLuwT9OPuLGPTZpAdwL2hv48tSuem-0lYjz_9IVgY6MYOOb3HrWDkUQeBUIJPgSyzNkEAiieAami4qWGqRVpf1MgnC2KKfSJ32TOVDg8VmFy7x15W89EFe-nX6GT-zmxNPCv8qeb0VyU6pQ74SrQDDgyWs9qDzoSIDUtlgqPn"/>
+<div class="absolute inset-0 bg-primary/20 flex items-center justify-center">
+<span class="material-symbols-outlined text-white text-lg">check_circle</span>
+</div>
+</div>
+<div class="flex-1 min-w-0">
+<p class="text-xs font-bold truncate">Campaign_V1_R14.mp4</p>
+<div class="flex justify-between items-center mt-1">
+<span class="text-[10px] text-on-surface-variant">Encoding... 72%</span>
+<span class="material-symbols-outlined text-sm text-primary animate-spin">sync</span>
+</div>
+<div class="mt-1 h-1 w-full bg-surface-container rounded-full overflow-hidden">
+<div class="h-full bg-primary" style="width: 72%"></div>
+</div>
+</div>
+</div>
+</div>
+<!-- Queue Item 2 -->
+<div class="border border-outline-variant rounded overflow-hidden hover:border-secondary transition-colors">
+<div class="flex p-2 gap-3">
+<div class="w-20 h-12 bg-black rounded shrink-0 grayscale opacity-50">
+<img class="w-full h-full object-cover" data-alt="A minimalist tech store interior with neon lighting and high-tech displays. The scene is shot from a low angle, emphasizing modern architecture and clean lines. Perfect for a digital ad template." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAwnQ40QvY9a3LaIb_MTBSl7cemp6c_Ohuxtt3blPCVyokMF8DOLua1t5I8jcoVGKoNr8QoXD5dyDEBOQsQVRXrL9RnW5t76Jr-BdFyw43jyGMMZ63jzecRNSPii6iQGvyH6-iSScDQhO5YCkwIMHHRbHnXXfsIeI0aQbCrM3UvbuTpd4acoE7Jg6IbUCmU2tEQRiE3XjKgURQIZ91s-g6_ePFdQXQdV_HvCR8WN_S48c_iFWeYGNrZ"/>
+</div>
+<div class="flex-1 min-w-0">
+<p class="text-xs font-bold truncate text-on-surface-variant">Campaign_V1_R15.mp4</p>
+<span class="text-[10px] text-on-surface-variant block mt-1 italic">Waiting in queue...</span>
+</div>
+</div>
+</div>
+<!-- Queue Item 3 (Error) -->
+<div class="border border-error bg-error-container/10 rounded overflow-hidden">
+<div class="flex p-2 gap-3">
+<div class="w-20 h-12 bg-black rounded shrink-0 relative">
+<img class="w-full h-full object-cover opacity-50" data-alt="Close-up of a blurred keyboard with professional studio lighting in shades of purple and pink. A modern, dark tech vibe for a creative production software background." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCvXDUPLLozLbaROS-S5tPPsIs5y7P9b-chOYdaaw6Kx78p_ua2qWOtPqUR1zRYZpp1045WLyuCnvIoAztoo36CLYpl0ZlqSrxcWhJpAjXvGgR_CfKeOKpcjxJBy5sKvcOZ-ilJnY5wRuuamW4270Xe6GCN0BcOXAxDSu4QR4-ymV9kMjGzUWi_8tTZOkxh325zA7ucd9ES-yLeSwhyGSIKpSre4uYxqcUFLU8qZHULZhoFvyiy7Gax"/>
+<div class="absolute inset-0 flex items-center justify-center">
+<span class="material-symbols-outlined text-error text-lg">error</span>
+</div>
+</div>
+<div class="flex-1 min-w-0">
+<p class="text-xs font-bold truncate text-on-surface">Campaign_V1_R16.mp4</p>
+<span class="text-[10px] text-error font-bold block mt-1 uppercase tracking-tighter">Missing Font Asset</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Footer for Queue -->
+<div class="p-3 bg-surface-container border-t border-outline-variant space-y-3">
+<div class="flex justify-between text-[10px] font-bold text-on-surface-variant uppercase">
+<span>Est. Time: 14m 20s</span>
+<span>Disk: 2.4 GB</span>
+</div>
+<button class="w-full bg-primary text-white py-2 rounded font-bold text-xs hover:bg-primary-container transition-colors shadow-sm">
+                    START QUEUE
+                </button>
+</div>
+</aside>
+</main>
+<!-- Footer Status Bar -->
+<footer class="flex justify-between items-center px-panel_padding z-50 bg-surface-container dark:bg-surface-container border-t border-outline-variant dark:border-outline h-8 shrink-0">
+<div class="flex items-center gap-4">
+<span class="font-status-bar text-status-bar text-on-surface-variant">Project: Winter_Campaign_Bulk</span>
+<span class="font-status-bar text-status-bar text-on-surface-variant opacity-30">|</span>
+<span class="font-status-bar text-status-bar text-on-surface-variant">Resolution: 1080x1920 (9:16)</span>
+<span class="font-status-bar text-status-bar text-on-surface-variant opacity-30">|</span>
+<span class="font-status-bar text-status-bar text-on-surface-variant">FPS: 30</span>
+</div>
+<div class="flex items-center gap-4">
+<a class="font-status-bar text-status-bar text-on-surface-variant hover:text-primary transition-colors" href="#">System Status</a>
+<div class="flex items-center gap-1">
+<div class="w-2 h-2 bg-green-500 rounded-full"></div>
+<span class="font-status-bar text-status-bar text-on-surface-variant">Engine Ready</span>
+</div>
+</div>
+</footer>
+<script>
+        // Simple micro-interaction for ribbon buttons
+        document.querySelectorAll('.ribbon-button-large').forEach(button => {
+            button.addEventListener('mousedown', () => {
+                button.classList.add('scale-95');
+                button.classList.add('bg-primary/10');
+            });
+            button.addEventListener('mouseup', () => {
+                button.classList.remove('scale-95');
+                button.classList.remove('bg-primary/10');
+            });
+            button.addEventListener('mouseleave', () => {
+                button.classList.remove('scale-95');
+                button.classList.remove('bg-primary/10');
+            });
+        });
+    </script>
+</body></html>

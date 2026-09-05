@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>ForgeCut - Video Editor</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@100;300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "secondary": "#5c5f60",
+                    "on-surface": "#181c22",
+                    "surface-container-low": "#f1f3fc",
+                    "on-error": "#ffffff",
+                    "on-secondary-container": "#606365",
+                    "surface-bright": "#f8f9ff",
+                    "on-primary-fixed-variant": "#004883",
+                    "on-error-container": "#93000a",
+                    "secondary-container": "#dee0e2",
+                    "outline": "#717783",
+                    "primary-fixed-dim": "#a3c9ff",
+                    "surface-dim": "#d7dae2",
+                    "inverse-primary": "#a3c9ff",
+                    "surface-container-highest": "#e0e2ea",
+                    "primary": "#005faa",
+                    "tertiary": "#974700",
+                    "on-primary-fixed": "#001c39",
+                    "on-secondary-fixed-variant": "#444749",
+                    "on-primary": "#ffffff",
+                    "error-container": "#ffdad6",
+                    "tertiary-container": "#bc5b00",
+                    "on-tertiary": "#ffffff",
+                    "inverse-on-surface": "#eef0f9",
+                    "surface": "#f8f9ff",
+                    "on-background": "#181c22",
+                    "primary-fixed": "#d3e3ff",
+                    "on-tertiary-fixed-variant": "#743500",
+                    "outline-variant": "#c0c7d4",
+                    "on-primary-container": "#ffffff",
+                    "on-tertiary-fixed": "#311300",
+                    "background": "#f8f9ff",
+                    "surface-variant": "#e0e2ea",
+                    "on-secondary": "#ffffff",
+                    "surface-container-lowest": "#ffffff",
+                    "on-secondary-fixed": "#191c1e",
+                    "secondary-fixed": "#e1e2e4",
+                    "on-tertiary-container": "#ffffff",
+                    "primary-container": "#0078d4",
+                    "inverse-surface": "#2d3137",
+                    "surface-tint": "#0060ab",
+                    "tertiary-fixed-dim": "#ffb689",
+                    "error": "#ba1a1a",
+                    "tertiary-fixed": "#ffdbc8",
+                    "surface-container": "#ebeef6",
+                    "on-surface-variant": "#404752",
+                    "surface-container-high": "#e6e8f0",
+                    "secondary-fixed-dim": "#c5c7c8"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.125rem",
+                    "lg": "0.25rem",
+                    "xl": "0.5rem",
+                    "full": "0.75rem"
+            },
+            "spacing": {
+                    "ribbon_height": "140px",
+                    "element_gap": "8px",
+                    "export_queue_width": "320px",
+                    "panel_padding": "16px",
+                    "gutter": "1px",
+                    "timeline_height": "300px",
+                    "sidebar_width": "240px",
+                    "ribbon_group_padding": "12px"
+            },
+            "fontFamily": {
+                    "timeline-timecode": ["Libre Franklin"],
+                    "label-sm": ["Libre Franklin"],
+                    "ribbon-tab": ["Libre Franklin"],
+                    "panel-header": ["Libre Franklin"],
+                    "body-md": ["Libre Franklin"],
+                    "status-bar": ["Libre Franklin"],
+                    "ribbon-group-label": ["Libre Franklin"]
+            },
+            "fontSize": {
+                    "timeline-timecode": ["11px", {"lineHeight": "14px", "letterSpacing": "0.05em", "fontWeight": "400"}],
+                    "label-sm": ["12px", {"lineHeight": "16px", "fontWeight": "400"}],
+                    "ribbon-tab": ["14px", {"lineHeight": "20px", "fontWeight": "500"}],
+                    "panel-header": ["14px", {"lineHeight": "24px", "fontWeight": "600"}],
+                    "body-md": ["13px", {"lineHeight": "18px", "fontWeight": "400"}],
+                    "status-bar": ["11px", {"lineHeight": "16px", "fontWeight": "400"}],
+                    "ribbon-group-label": ["11px", {"lineHeight": "16px", "letterSpacing": "0.02em", "fontWeight": "400"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            display: inline-block;
+            vertical-align: middle;
+        }
+        .ribbon-group-border {
+            border-right: 1px solid #e0e2ea;
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 4px;
+            height: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #c0c7d4;
+            border-radius: 10px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .transition-card-active {
+            outline: 2px solid #0078d4;
+            background-color: #e1f1ff;
+        }
+    </style>
+</head>
+<body class="bg-background font-body-md text-on-surface h-screen overflow-hidden flex flex-col">
+<!-- TopNavBar Shell -->
+<header class="bg-surface dark:bg-surface-dim flex flex-col w-full docked full-width top-0 border-b border-outline-variant dark:border-outline z-50">
+<!-- Title Bar -->
+<div class="flex items-center justify-between px-4 h-8 bg-surface-container-low">
+<div class="flex items-center gap-4">
+<span class="font-panel-header text-panel-header font-bold text-on-surface">ForgeCut</span>
+<nav class="flex gap-4">
+<span class="text-on-surface-variant dark:text-on-surface-variant hover:text-on-surface cursor-pointer font-ribbon-tab text-ribbon-tab transition-colors">File</span>
+<span class="text-on-surface-variant dark:text-on-surface-variant hover:text-on-surface cursor-pointer font-ribbon-tab text-ribbon-tab transition-colors">Home</span>
+<span class="text-on-surface-variant dark:text-on-surface-variant hover:text-on-surface cursor-pointer font-ribbon-tab text-ribbon-tab transition-colors">Insert</span>
+<span class="text-on-surface-variant dark:text-on-surface-variant hover:text-on-surface cursor-pointer font-ribbon-tab text-ribbon-tab transition-colors">Draw</span>
+<span class="text-on-surface-variant dark:text-on-surface-variant hover:text-on-surface cursor-pointer font-ribbon-tab text-ribbon-tab transition-colors">Design</span>
+<span class="text-primary dark:text-inverse-primary border-b-2 border-primary dark:border-inverse-primary font-bold cursor-pointer font-ribbon-tab text-ribbon-tab">Transitions</span>
+<span class="text-on-surface-variant dark:text-on-surface-variant hover:text-on-surface cursor-pointer font-ribbon-tab text-ribbon-tab transition-colors">Animations</span>
+<span class="text-on-surface-variant dark:text-on-surface-variant hover:text-on-surface cursor-pointer font-ribbon-tab text-ribbon-tab transition-colors">Slide Show</span>
+</nav>
+</div>
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-on-surface-variant cursor-pointer hover:bg-surface-container-high p-1 rounded transition-colors" data-icon="settings">settings</span>
+<span class="material-symbols-outlined text-on-surface-variant cursor-pointer hover:bg-surface-container-high p-1 rounded transition-colors" data-icon="help">help</span>
+<span class="material-symbols-outlined text-on-surface-variant cursor-pointer hover:bg-surface-container-high p-1 rounded transition-colors" data-icon="minimize">minimize</span>
+<span class="material-symbols-outlined text-on-surface-variant cursor-pointer hover:bg-surface-container-high p-1 rounded transition-colors" data-icon="close">close</span>
+</div>
+</div>
+<!-- Transitions Ribbon Content -->
+<div class="h-[108px] flex items-stretch px-2 bg-surface">
+<!-- Group: Preview -->
+<div class="flex flex-col items-center justify-between p-ribbon_group_padding ribbon-group-border min-w-[80px]">
+<div class="flex flex-col items-center justify-center flex-1 hover:bg-surface-container-high dark:hover:bg-surface-container-highest transition-colors p-2 rounded cursor-pointer group">
+<span class="material-symbols-outlined text-primary text-[32px]" data-icon="play_circle">play_circle</span>
+<span class="font-label-sm text-label-sm mt-1 text-center">Preview<br/>Transition</span>
+</div>
+<span class="font-ribbon-group-label text-ribbon-group-label text-on-surface-variant opacity-60">Preview</span>
+</div>
+<!-- Group: Transition Gallery -->
+<div class="flex flex-col items-center justify-between p-ribbon_group_padding ribbon-group-border">
+<div class="flex gap-2 overflow-x-auto custom-scrollbar flex-1 items-center px-1">
+<div class="flex flex-col items-center p-1 w-16 hover:bg-surface-container-high transition-colors rounded cursor-pointer group">
+<span class="material-symbols-outlined text-[24px] text-on-surface-variant" data-icon="block">block</span>
+<span class="font-label-sm text-label-sm mt-1">None</span>
+</div>
+<div class="flex flex-col items-center p-1 w-16 hover:bg-surface-container-high transition-colors rounded cursor-pointer group transition-card-active">
+<span class="material-symbols-outlined text-[24px] text-primary" data-icon="blur_on">blur_on</span>
+<span class="font-label-sm text-label-sm mt-1">Fade</span>
+</div>
+<div class="flex flex-col items-center p-1 w-16 hover:bg-surface-container-high transition-colors rounded cursor-pointer group">
+<span class="material-symbols-outlined text-[24px] text-on-surface-variant" data-icon="texture">texture</span>
+<span class="font-label-sm text-label-sm mt-1">Dissolve</span>
+</div>
+<div class="flex flex-col items-center p-1 w-16 hover:bg-surface-container-high transition-colors rounded cursor-pointer group">
+<span class="material-symbols-outlined text-[24px] text-on-surface-variant" data-icon="arrow_forward">arrow_forward</span>
+<span class="font-label-sm text-label-sm mt-1">Push</span>
+</div>
+<div class="flex flex-col items-center p-1 w-16 hover:bg-surface-container-high transition-colors rounded cursor-pointer group">
+<span class="material-symbols-outlined text-[24px] text-on-surface-variant" data-icon="horizontal_distribute">horizontal_distribute</span>
+<span class="font-label-sm text-label-sm mt-1">Wipe</span>
+</div>
+<div class="flex flex-col items-center p-1 w-16 hover:bg-surface-container-high transition-colors rounded cursor-pointer group">
+<span class="material-symbols-outlined text-[24px] text-on-surface-variant" data-icon="visibility">visibility</span>
+<span class="font-label-sm text-label-sm mt-1">Reveal</span>
+</div>
+<div class="flex flex-col items-center p-1 w-16 hover:bg-surface-container-high transition-colors rounded cursor-pointer group">
+<span class="material-symbols-outlined text-[24px] text-on-surface-variant" data-icon="splitscreen">splitscreen</span>
+<span class="font-label-sm text-label-sm mt-1">Split</span>
+</div>
+<div class="flex flex-col items-center p-1 w-16 hover:bg-surface-container-high transition-colors rounded cursor-pointer group">
+<span class="material-symbols-outlined text-[24px] text-on-surface-variant" data-icon="auto_fix_high">auto_fix_high</span>
+<span class="font-label-sm text-label-sm mt-1">Morph</span>
+</div>
+</div>
+<span class="font-ribbon-group-label text-ribbon-group-label text-on-surface-variant opacity-60">Transition Gallery</span>
+</div>
+<!-- Group: Options -->
+<div class="flex flex-col items-center justify-between p-ribbon_group_padding ribbon-group-border min-w-[240px]">
+<div class="grid grid-cols-2 gap-x-4 gap-y-1 w-full h-full pt-1">
+<div class="flex flex-col gap-1">
+<div class="flex items-center gap-2">
+<span class="font-label-sm text-label-sm w-16">Duration:</span>
+<div class="flex items-center bg-white border border-outline-variant rounded px-1 h-6 w-20">
+<input class="w-full text-[11px] focus:outline-none border-none p-0" type="text" value="01.50"/>
+<div class="flex flex-col">
+<span class="material-symbols-outlined text-[10px] leading-none cursor-pointer" data-icon="arrow_drop_up">arrow_drop_up</span>
+<span class="material-symbols-outlined text-[10px] leading-none cursor-pointer" data-icon="arrow_drop_down">arrow_drop_down</span>
+</div>
+</div>
+</div>
+<div class="flex items-center gap-2">
+<span class="font-label-sm text-label-sm w-16">Sound:</span>
+<div class="flex items-center bg-white border border-outline-variant rounded px-1 h-6 w-20 relative">
+<span class="text-[11px] truncate flex-1">[None]</span>
+<span class="material-symbols-outlined text-[12px]" data-icon="arrow_drop_down">arrow_drop_down</span>
+</div>
+</div>
+</div>
+<div class="flex flex-col gap-1">
+<button class="bg-surface hover:bg-surface-container-highest border border-outline-variant rounded h-6 px-2 flex items-center gap-1 transition-colors">
+<span class="material-symbols-outlined text-[14px]" data-icon="check_box">check_box</span>
+<span class="font-label-sm text-label-sm whitespace-nowrap">Apply To Selected</span>
+</button>
+<button class="bg-surface hover:bg-surface-container-highest border border-outline-variant rounded h-6 px-2 flex items-center gap-1 transition-colors">
+<span class="material-symbols-outlined text-[14px]" data-icon="done_all">done_all</span>
+<span class="font-label-sm text-label-sm whitespace-nowrap">Apply To All</span>
+</button>
+</div>
+</div>
+<span class="font-ribbon-group-label text-ribbon-group-label text-on-surface-variant opacity-60">Options</span>
+</div>
+</div>
+</header>
+<!-- Main Workspace -->
+<main class="flex flex-1 overflow-hidden">
+<!-- Left Sidebar: Project Explorer -->
+<aside class="w-sidebar_width bg-surface-container-low border-r border-outline-variant flex flex-col h-full flex-shrink-0">
+<div class="p-panel_padding flex items-center justify-between">
+<h2 class="font-panel-header text-panel-header font-semibold text-on-surface">Project Assets</h2>
+<span class="material-symbols-outlined text-secondary cursor-pointer" data-icon="add">add</span>
+</div>
+<div class="flex-1 overflow-y-auto px-2 space-y-2 custom-scrollbar">
+<div class="bg-primary-container text-on-primary-container font-bold rounded-lg p-2 flex items-center gap-3">
+<span class="material-symbols-outlined" data-icon="perm_media">perm_media</span>
+<span class="font-label-sm text-label-sm">B-Roll Footage</span>
+</div>
+<div class="text-on-surface-variant hover:bg-surface-container-highest p-2 rounded flex items-center gap-3 cursor-pointer transition-colors">
+<span class="material-symbols-outlined" data-icon="audiotrack">audiotrack</span>
+<span class="font-label-sm text-label-sm">Background_Score.mp3</span>
+</div>
+<div class="text-on-surface-variant hover:bg-surface-container-highest p-2 rounded flex items-center gap-3 cursor-pointer transition-colors">
+<span class="material-symbols-outlined" data-icon="title">title</span>
+<span class="font-label-sm text-label-sm">Intro_Titles</span>
+</div>
+<div class="text-on-surface-variant hover:bg-surface-container-highest p-2 rounded flex items-center gap-3 cursor-pointer transition-colors">
+<span class="material-symbols-outlined" data-icon="category">category</span>
+<span class="font-label-sm text-label-sm">Geometric_Overlays</span>
+</div>
+</div>
+</aside>
+<!-- Center: Preview & Timeline -->
+<section class="flex flex-col flex-1 min-w-0 bg-surface-dim">
+<!-- Canvas / Preview -->
+<div class="flex-1 relative flex items-center justify-center p-8">
+<div class="aspect-video w-full max-w-4xl bg-black shadow-2xl relative overflow-hidden flex items-center justify-center">
+<img class="w-full h-full object-cover opacity-60" data-alt="A professional high-definition cinematic landscape of misty mountains at sunrise. The lighting is golden and ethereal, creating a peaceful and expensive mood. The frame shows professional video editing color grading with deep blues in shadows and warm orange highlights. A subtle motion blur suggests a slow drone pan across the peaks." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDri2TRfRNimjiFS6jrD51kk4nrioJeehJPaWcXWJbhAC5u7lF5av-9tAnnlox8kfUG76h80RugPlfGuwq4OsZPM8BoxZBY05h0G1KN0VVmnoeL0_wFcXqS372gBRPwoDlFZZY-bY_2pUDyRynJHv1BzB8slWm1koR3mmxpja04-8O4fXgTFTsrR7-4gVBRoL5eVxIoLz29c2BbaLonvMgJop7FNanPQq3w46xIKyEmJwI1_YbBdfu4"/>
+<div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+<!-- Simulated Transition Visualizer -->
+<div class="w-full h-full bg-white/10 backdrop-blur-sm animate-pulse flex items-center justify-center">
+<span class="text-white font-bold text-xl tracking-widest uppercase bg-black/40 px-4 py-2 rounded">Fade Transition Preview</span>
+</div>
+</div>
+<!-- Controls Overlay -->
+<div class="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/60 backdrop-blur-md rounded-full px-6 py-2 flex items-center gap-6 border border-white/10">
+<span class="material-symbols-outlined text-white cursor-pointer hover:text-primary transition-colors" data-icon="skip_previous">skip_previous</span>
+<span class="material-symbols-outlined text-white text-3xl cursor-pointer hover:text-primary transition-colors" data-icon="play_arrow">play_arrow</span>
+<span class="material-symbols-outlined text-white cursor-pointer hover:text-primary transition-colors" data-icon="skip_next">skip_next</span>
+</div>
+<div class="absolute bottom-4 right-4 text-white font-timeline-timecode text-timeline-timecode">
+                        00:00:12:15
+                    </div>
+</div>
+</div>
+<!-- Timeline -->
+<div class="h-timeline_height bg-white border-t border-outline-variant flex flex-col">
+<!-- Ruler / Header -->
+<div class="h-8 border-b border-outline-variant flex items-center bg-surface-container">
+<div class="w-48 border-r border-outline-variant flex items-center px-4">
+<span class="font-label-sm text-label-sm font-bold text-on-surface-variant">Timeline</span>
+</div>
+<div class="flex-1 relative overflow-hidden h-full flex items-end">
+<div class="flex w-[200%] gap-20 px-4">
+<span class="font-timeline-timecode text-timeline-timecode text-on-surface-variant">00:00:00</span>
+<span class="font-timeline-timecode text-timeline-timecode text-on-surface-variant">00:00:10</span>
+<span class="font-timeline-timecode text-timeline-timecode text-on-surface-variant">00:00:20</span>
+<span class="font-timeline-timecode text-timeline-timecode text-on-surface-variant">00:00:30</span>
+<span class="font-timeline-timecode text-timeline-timecode text-on-surface-variant">00:00:40</span>
+</div>
+<div class="absolute left-1/4 top-0 w-[1px] h-full bg-primary z-10">
+<div class="w-3 h-4 bg-primary absolute -top-1 -left-[5px] rounded-b-sm"></div>
+</div>
+</div>
+</div>
+<!-- Tracks -->
+<div class="flex-1 overflow-y-auto custom-scrollbar bg-surface-container-lowest">
+<!-- Video Track 1 -->
+<div class="flex h-12 border-b border-outline-variant bg-surface-container-low/30">
+<div class="w-48 border-r border-outline-variant flex items-center justify-between px-3">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[16px]" data-icon="videocam">videocam</span>
+<span class="text-[11px] font-medium">Video 1</span>
+</div>
+<div class="flex gap-1">
+<span class="material-symbols-outlined text-[14px] opacity-40 cursor-pointer" data-icon="visibility">visibility</span>
+<span class="material-symbols-outlined text-[14px] opacity-40 cursor-pointer" data-icon="lock">lock</span>
+</div>
+</div>
+<div class="flex-1 p-1 flex gap-px relative">
+<div class="w-40 bg-primary-container/20 border border-primary/30 rounded h-full flex items-center px-2">
+<span class="text-[10px] truncate text-primary font-bold">Intro_Sequence.mp4</span>
+</div>
+<!-- Active Transition Node -->
+<div class="w-8 bg-primary h-full rounded-sm flex items-center justify-center cursor-pointer shadow-sm z-20">
+<span class="material-symbols-outlined text-white text-[12px]" data-icon="blur_on">blur_on</span>
+</div>
+<div class="w-64 bg-surface-container-highest border border-outline-variant rounded h-full flex items-center px-2">
+<span class="text-[10px] truncate">Beach_Sunrise_4K.mov</span>
+</div>
+</div>
+</div>
+<!-- Audio Track 1 -->
+<div class="flex h-12 border-b border-outline-variant bg-surface-container-low/10">
+<div class="w-48 border-r border-outline-variant flex items-center justify-between px-3">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[16px]" data-icon="volume_up">volume_up</span>
+<span class="text-[11px] font-medium">Audio 1</span>
+</div>
+<div class="flex gap-1">
+<span class="material-symbols-outlined text-[14px] opacity-40 cursor-pointer" data-icon="volume_off">volume_off</span>
+<span class="material-symbols-outlined text-[14px] opacity-40 cursor-pointer" data-icon="lock">lock</span>
+</div>
+</div>
+<div class="flex-1 p-1">
+<div class="w-[500px] h-full bg-secondary-container/40 rounded flex flex-col justify-center px-2 border border-secondary/20">
+<div class="w-full h-4 flex items-center gap-[1px]">
+<div class="flex-1 bg-secondary/30 h-[2px]"></div>
+<div class="flex-1 bg-secondary/30 h-[8px]"></div>
+<div class="flex-1 bg-secondary/30 h-[4px]"></div>
+<div class="flex-1 bg-secondary/30 h-[12px]"></div>
+<div class="flex-1 bg-secondary/30 h-[6px]"></div>
+<div class="flex-1 bg-secondary/30 h-[10px]"></div>
+<div class="flex-1 bg-secondary/30 h-[3px]"></div>
+<div class="flex-1 bg-secondary/30 h-[14px]"></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Right Sidebar: Export Queue -->
+<aside class="w-export_queue_width bg-white border-l border-outline-variant flex flex-col h-full flex-shrink-0">
+<div class="p-panel_padding border-b border-outline-variant">
+<h2 class="font-panel-header text-panel-header font-semibold text-on-surface">Export Queue</h2>
+</div>
+<div class="flex-1 overflow-y-auto p-panel_padding space-y-4 custom-scrollbar">
+<!-- Export Card -->
+<div class="flex flex-col gap-3 p-3 bg-surface border border-primary rounded-lg relative ring-2 ring-primary/20">
+<div class="absolute top-2 left-2 z-10">
+<span class="material-symbols-outlined text-primary bg-white rounded-full text-lg" data-icon="check_circle">check_circle</span>
+</div>
+<div class="aspect-video bg-black rounded overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="A professional video editor's thumbnail showing a high-contrast cinematic shot of a modern skyscraper in a city. The export preview shows a rendering progress bar and file metadata. The overall look is clean, professional, and corporate with a cool color palette of blues and greys." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCjGKbVUF6jx4kEiLtyhclL89HaWGG0b1SRSwYB7ja_4RHlqdEY-cf47O7KXRhsdLvIljA_3znCqyGLgpG-z0wSclwrQcmB0Dta61ZKq3BrryhWNVMfulv3VMewjXJQz6hatvZ2LVrWen4_B2berOQuQr2xRveX1wtQhzEXcQ03lM5zenbhP2ALfpn5Lp_saESuOTJ9aP2OmP4u2rDaD4QfOLSZw3vvMUgqdHQZTCmwuRgohyeeL6S8"/>
+</div>
+<div class="flex flex-col gap-1">
+<span class="text-[12px] font-bold">Marketing_Final_V2.mp4</span>
+<span class="text-[11px] text-on-surface-variant">1080p | 60fps | H.264</span>
+<div class="w-full bg-surface-container-highest h-1 rounded-full mt-1 overflow-hidden">
+<div class="w-2/3 h-full bg-primary"></div>
+</div>
+<span class="text-[10px] text-right text-primary font-bold">65% Rendering...</span>
+</div>
+</div>
+<!-- Idle Card -->
+<div class="flex flex-col gap-3 p-3 bg-surface border border-outline-variant rounded-lg hover:border-primary/50 transition-colors cursor-pointer group">
+<div class="aspect-video bg-black rounded overflow-hidden opacity-80 group-hover:opacity-100 transition-opacity">
+<img class="w-full h-full object-cover" data-alt="A video editing project thumbnail of a beautiful mountain landscape at dusk. The sky is a deep purple and indigo with stars starting to appear. The atmosphere is calm and professional. The image is crisp and clear, representing a high-quality video project waiting to be exported." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAIXX8uD_3RKEyKMBOP5MdfRMjG9QSZwgkChIxSGqLxBR_yUBgchi-KWiOCIJzMB824MK1mOWnuwnv2pt7y2F3jawzwOK-TXDnrtXLFnKsOqs_Czok4MbD5T2doxmU4NjzAFO-LJB4plH6UxxByjvxf4uKxprIoVIzGRiYO_1IAuf5Ja5j-Vz91sX6kR5Q786dL6hVWIeHitt62vlXxQs7dandlFWhqSEHxlSq48AThDVC45JUIiM2I"/>
+</div>
+<div class="flex flex-col gap-1">
+<span class="text-[12px] font-bold text-on-surface-variant">Promo_Teaser_01.mp4</span>
+<span class="text-[11px] text-on-surface-variant">4K | 30fps | ProRes</span>
+</div>
+</div>
+</div>
+<div class="p-4 border-t border-outline-variant">
+<button class="w-full bg-primary text-white font-bold py-2 rounded shadow-sm hover:bg-primary-container transition-colors flex items-center justify-center gap-2">
+<span class="material-symbols-outlined" data-icon="ios_share">ios_share</span>
+                    Export All
+                </button>
+</div>
+</aside>
+</main>
+<!-- Footer Status Bar -->
+<footer class="bg-surface-container dark:bg-surface-container text-on-surface-variant dark:text-on-surface-variant border-t border-outline-variant dark:border-outline docked fixed bottom-0 w-full h-8 flex justify-between items-center px-panel_padding z-50">
+<div class="flex items-center gap-6">
+<span class="font-status-bar text-status-bar">Project: ForgeCut_Campaign_2024</span>
+<span class="font-status-bar text-status-bar">Resolution: 1080x1920</span>
+<span class="font-status-bar text-status-bar">FPS: 30</span>
+<span class="font-status-bar text-status-bar">Selection: Fade (1.5s)</span>
+</div>
+<div class="flex items-center gap-4">
+<span class="font-status-bar text-status-bar hover:text-primary transition-colors cursor-pointer">System Status</span>
+<div class="flex items-center gap-1">
+<span class="w-2 h-2 rounded-full bg-green-500"></span>
+<span class="font-status-bar text-status-bar">Connected</span>
+</div>
+</div>
+</footer>
+<script>
+        // Micro-interactions for ribbon tabs
+        document.querySelectorAll('nav span').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('nav span').forEach(t => {
+                    t.classList.remove('text-primary', 'dark:text-inverse-primary', 'border-b-2', 'border-primary', 'dark:border-inverse-primary', 'font-bold');
+                    t.classList.add('text-on-surface-variant', 'dark:text-on-surface-variant');
+                });
+                tab.classList.add('text-primary', 'dark:text-inverse-primary', 'border-b-2', 'border-primary', 'dark:border-inverse-primary', 'font-bold');
+                tab.classList.remove('text-on-surface-variant', 'dark:text-on-surface-variant');
+            });
+        });
+
+        // Simple gallery selection interaction
+        const galleryItems = document.querySelectorAll('.flex-col.p-1.w-16');
+        galleryItems.forEach(item => {
+            item.addEventListener('click', () => {
+                galleryItems.forEach(i => i.classList.remove('transition-card-active'));
+                item.classList.add('transition-card-active');
+            });
+        });
+    </script>
+</body></html>

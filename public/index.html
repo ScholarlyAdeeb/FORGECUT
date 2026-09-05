@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="en" class="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ForgeCut NLE - High-Performance Multi-Track Video Creator</title>
+    
+    <!-- Google Fonts & Material Icons -->
+    <link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@100..900&family=Bebas+Neue&family=Inter:wght@400;700&family=Lato:ital,wght@0,400;0,700;1,400;1,700&family=Montserrat:ital,wght@0,400;0,700;1,400;1,700&family=Open+Sans:ital,wght@0,400;0,700;1,400;1,700&family=Playfair+Display:ital,wght@0,400;0,700;1,400;1,700&family=Poppins:ital,wght@0,400;0,700;1,400;1,700&family=Roboto:ital,wght@0,400;0,700;1,400;1,700&display=swap" rel="stylesheet" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=block" rel="stylesheet" crossorigin>
+    
+    <!-- PapaParse & JSZip -->
+    <script src="papaparse.js"></script>
+    <script src="jszip.js"></script>
+    
+    <!-- Tailwind CSS with configuration -->
+    <script src="tailwind.js"></script>
+    <style>
+        :root, html.light {
+            --primary: #005faa;
+            --surface: #f8f9ff;
+            --on-surface: #181c22;
+            --surface-container: #ebeef6;
+            --surface-container-low: #f1f3fc;
+            --surface-container-highest: #e0e2ea;
+            --on-surface-variant: #404752;
+            --outline: #717783;
+            --outline-variant: #c0c7d4;
+            --primary-container: #0078d4;
+            --on-primary-container: #ffffff;
+            --error: #ba1a1a;
+            --background: #f8f9ff;
+            --inverse-surface: #2d3137;
+            --on-primary: #ffffff;
+        }
+        html.dark {
+            --primary: #a3c9ff;
+            --surface: #111418;
+            --on-surface: #e2e2e6;
+            --surface-container: #1d2024;
+            --surface-container-low: #191c20;
+            --surface-container-highest: #33353a;
+            --on-surface-variant: #c4c6d0;
+            --outline: #8e9099;
+            --outline-variant: #44474e;
+            --primary-container: #004881;
+            --on-primary-container: #d1e4ff;
+            --error: #ffb4ab;
+            --background: #111418;
+            --inverse-surface: #e2e2e6;
+            --on-primary: #003060;
+        }
+    </style>
+    <script>
+        try {
+            tailwind.config = {
+                darkMode: "class",
+                theme: {
+                    extend: {
+                        colors: {
+                            "primary": "var(--primary)",
+                            "surface": "var(--surface)",
+                            "on-surface": "var(--on-surface)",
+                            "surface-container": "var(--surface-container)",
+                            "surface-container-low": "var(--surface-container-low)",
+                            "surface-container-highest": "var(--surface-container-highest)",
+                            "on-surface-variant": "var(--on-surface-variant)",
+                            "outline": "var(--outline)",
+                            "outline-variant": "var(--outline-variant)",
+                            "primary-container": "var(--primary-container)",
+                            "on-primary-container": "var(--on-primary-container)",
+                            "on-primary": "var(--on-primary)",
+                            "error": "var(--error)",
+                            "background": "var(--background)",
+                            // Fallbacks
+                            "tertiary-container": "#bc5b00",
+                            "inverse-surface": "#2d3137",
+                            "secondary": "#5c5f60"
+                        },
+                        borderRadius: {
+                            "DEFAULT": "0.125rem",
+                            "lg": "0.25rem",
+                            "xl": "0.5rem",
+                            "full": "0.75rem"
+                        },
+                        spacing: {
+                            "sidebar_width": "240px",
+                            "gutter": "1px",
+                            "ribbon_group_padding": "12px",
+                            "panel_padding": "16px",
+                            "ribbon_height": "140px",
+                            "export_queue_width": "320px",
+                            "timeline_height": "300px",
+                            "element_gap": "8px"
+                        },
+                        fontFamily: {
+                            "sans": ["Libre Franklin", "sans-serif"],
+                            "timeline-timecode": ["Libre Franklin"],
+                            "ribbon-tab": ["Libre Franklin"],
+                            "label-sm": ["Libre Franklin"],
+                            "panel-header": ["Libre Franklin"],
+                            "status-bar": ["Libre Franklin"],
+                            "body-md": ["Libre Franklin"],
+                            "ribbon-group-label": ["Libre Franklin"]
+                        },
+                        fontSize: {
+                            "timeline-timecode": ["11px", {"lineHeight": "14px", "letterSpacing": "0.05em", "fontWeight": "400"}],
+                            "ribbon-tab": ["14px", {"lineHeight": "20px", "fontWeight": "500"}],
+                            "label-sm": ["12px", {"lineHeight": "16px", "fontWeight": "400"}],
+                            "panel-header": ["14px", {"lineHeight": "24px", "fontWeight": "600"}],
+                            "status-bar": ["11px", {"lineHeight": "16px", "fontWeight": "400"}],
+                            "body-md": ["13px", {"lineHeight": "18px", "fontWeight": "400"}],
+                            "ribbon-group-label": ["11px", {"lineHeight": "16px", "letterSpacing": "0.02em", "fontWeight": "400"}]
+                        }
+                    }
+                }
+            };
+        } catch (e) {}
+    </script>
+    <link rel="stylesheet" href="editor.css">
+    
+    <!-- Load Modular Reusable Components -->
+    <script src="components/Header.js"></script>
+    <script src="components/Sidebar.js"></script>
+    <script src="components/Preview.js"></script>
+    <script src="components/Timeline.js"></script>
+    <script src="components/ExportQueue.js"></script>
+    <script src="components/Backstage.js"></script>
+    <script src="components/BatchGallery.js"></script>
+    <script src="components/BulkDrawer.js"></script>
+</head>
+<body class="bg-background text-on-surface font-body-md overflow-hidden h-screen flex flex-col">
+
+    <!-- ═══════════════════════════════════════
+         SPLASH SCREEN
+         ═══════════════════════════════════════ -->
+    <div id="fc-splash">
+        <div class="fc-splash-logo">
+            <span class="material-symbols-outlined fc-splash-icon" style="font-variation-settings:'FILL' 1;">movie_edit</span>
+            <div class="fc-splash-title">Forge<span>Cut</span></div>
+            <div class="fc-splash-badge">Professional Non-Linear Editor</div>
+        </div>
+        <div class="fc-splash-loader">
+            <div class="fc-splash-loader-bar"></div>
+        </div>
+        <div class="fc-splash-version">Version 1.0.0 · Fluent Design Edition</div>
+    </div>
+
+    <!-- ═══════════════════════════════════════
+         WELCOME DASHBOARD
+         ═══════════════════════════════════════ -->
+    <div id="fc-welcome" style="display:none;">
+        <div style="display:flex;height:100%;">
+            <!-- Sidebar -->
+            <div class="fc-welcome-sidebar">
+                <div class="fc-welcome-brand" style="margin-top:8px;">
+                    <span class="material-symbols-outlined fc-welcome-brand-icon" style="font-variation-settings:'FILL' 1;">movie_edit</span>
+                    <div class="fc-welcome-brand-name">ForgeCut</div>
+                </div>
+                <nav style="display:flex;flex-direction:column;margin-top:16px;flex:1;">
+                    <button class="fc-welcome-nav-item active" data-welcome-tab="new" onclick="switchWelcomeTab('new',this)">
+                        <span class="material-symbols-outlined">add_circle</span>New
+                    </button>
+                    <button class="fc-welcome-nav-item" data-welcome-tab="recent" onclick="switchWelcomeTab('recent',this)">
+                        <span class="material-symbols-outlined">history</span>Recent
+                    </button>
+                    <button class="fc-welcome-nav-item" data-welcome-tab="open" onclick="switchWelcomeTab('open',this)">
+                        <span class="material-symbols-outlined">folder_open</span>Open
+                    </button>
+                    <div style="flex:1;"></div>
+                    <button class="fc-welcome-nav-item" data-welcome-tab="settings" onclick="switchWelcomeTab('settings',this)">
+                        <span class="material-symbols-outlined">settings</span>Settings
+                    </button>
+                    <button class="fc-welcome-nav-item" data-welcome-tab="help" onclick="switchWelcomeTab('help',this)">
+                        <span class="material-symbols-outlined">help</span>Help
+                    </button>
+                </nav>
+                <div style="padding:16px 28px;font-size:11px;color:rgba(255,255,255,0.35);">ForgeCut Studio v1.0.0</div>
+            </div>
+
+            <!-- Content -->
+            <div class="fc-welcome-content">
+
+                <!-- NEW section -->
+                <div id="wt-new" class="fc-welcome-section active">
+                    <div class="fc-welcome-heading">New Project</div>
+                    <div class="fc-welcome-subheading">Choose a format</div>
+                    <div class="fc-template-grid">
+                        <div class="fc-template-card" onclick="launchEditor('16_9')">
+                            <div class="fc-template-card-preview" style="width:100px;height:56px;">
+                                <span class="material-symbols-outlined" style="font-size:28px;">aspect_ratio</span>
+                            </div>
+                            <div>
+                                <div class="fc-template-card-name">Landscape</div>
+                                <div class="fc-template-card-sub">1920 × 1080 · 16:9</div>
+                                <div class="fc-template-card-sub">YouTube · Desktop</div>
+                            </div>
+                        </div>
+                        <div class="fc-template-card" onclick="launchEditor('9_16')">
+                            <div class="fc-template-card-preview" style="width:56px;height:100px;">
+                                <span class="material-symbols-outlined" style="font-size:28px;">stay_current_portrait</span>
+                            </div>
+                            <div>
+                                <div class="fc-template-card-name">Portrait</div>
+                                <div class="fc-template-card-sub">1080 × 1920 · 9:16</div>
+                                <div class="fc-template-card-sub">TikTok · Reels · Shorts</div>
+                            </div>
+                        </div>
+                        <div class="fc-template-card" onclick="launchEditor('1_1')">
+                            <div class="fc-template-card-preview" style="width:80px;height:80px;">
+                                <span class="material-symbols-outlined" style="font-size:28px;">crop_square</span>
+                            </div>
+                            <div>
+                                <div class="fc-template-card-name">Square</div>
+                                <div class="fc-template-card-sub">1080 × 1080 · 1:1</div>
+                                <div class="fc-template-card-sub">Instagram Feed</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="fc-welcome-subheading">Quick Actions</div>
+                    <div class="fc-quick-actions">
+                        <button class="fc-quick-action-btn" onclick="document.getElementById('welcomeOpenInput').click()">
+                            <span class="material-symbols-outlined">folder_open</span>Open Project
+                        </button>
+                        <button class="fc-quick-action-btn" onclick="launchEditor('16_9')">
+                            <span class="material-symbols-outlined">video_library</span>Import Media
+                        </button>
+                        <button class="fc-quick-action-btn" onclick="switchWelcomeTab('help', document.querySelector('[data-welcome-tab=help]'))">
+                            <span class="material-symbols-outlined">help</span>Keyboard Shortcuts
+                        </button>
+                    </div>
+                    <input type="file" id="welcomeOpenInput" accept=".json" style="display:none;" onchange="welcomeOpenProject(event)">
+                </div>
+
+                <!-- RECENT section -->
+                <div id="wt-recent" class="fc-welcome-section">
+                    <div class="fc-welcome-heading">Recent Projects</div>
+                    <div id="welcomeRecentList">
+                        <div style="color:var(--on-surface-variant);font-size:13px;padding:20px 0;">No recent projects found. Start a new project to get started.</div>
+                    </div>
+                </div>
+
+                <!-- OPEN section -->
+                <div id="wt-open" class="fc-welcome-section">
+                    <div class="fc-welcome-heading">Open Project</div>
+                    <div class="fc-template-card" style="max-width:400px;flex-direction:row;gap:24px;padding:32px;" onclick="document.getElementById('welcomeOpenInput2').click()">
+                        <span class="material-symbols-outlined" style="font-size:48px;color:var(--primary);">folder_open</span>
+                        <div>
+                            <div class="fc-template-card-name" style="font-size:16px;margin-bottom:6px;">Browse for a Project</div>
+                            <div class="fc-template-card-sub">Open a saved ForgeCut project file (.json)</div>
+                        </div>
+                    </div>
+                    <input type="file" id="welcomeOpenInput2" accept=".json" style="display:none;" onchange="welcomeOpenProject(event)">
+                </div>
+
+                <!-- SETTINGS section -->
+                <div id="wt-settings" class="fc-welcome-section">
+                    <div class="fc-welcome-heading">Settings</div>
+                    <div style="display:flex;flex-direction:column;gap:16px;max-width:480px;">
+                        <div style="display:flex;justify-content:space-between;align-items:center;padding:16px 0;border-bottom:1px solid var(--outline-variant);">
+                            <div>
+                                <div style="font-size:14px;font-weight:600;color:var(--on-surface);">Dark Theme</div>
+                                <div style="font-size:12px;color:var(--on-surface-variant);">Toggle dark mode interface</div>
+                            </div>
+                            <input type="checkbox" id="welcomeDarkToggle" onchange="toggleDarkTheme()" style="width:20px;height:20px;accent-color:var(--primary);cursor:pointer;">
+                        </div>
+                        <div style="display:flex;justify-content:space-between;align-items:center;padding:16px 0;border-bottom:1px solid var(--outline-variant);">
+                            <div>
+                                <div style="font-size:14px;font-weight:600;color:var(--on-surface);">Safe Zones</div>
+                                <div style="font-size:12px;color:var(--on-surface-variant);">Show safe zone guides on canvas</div>
+                            </div>
+                            <input type="checkbox" checked onchange="if(window.toggleSafeAreaGuide)toggleSafeAreaGuide()" style="width:20px;height:20px;accent-color:var(--primary);cursor:pointer;">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- HELP section -->
+                <div id="wt-help" class="fc-welcome-section">
+                    <div class="fc-welcome-heading">Help &amp; Shortcuts</div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;max-width:640px;">
+                        <div style="padding:14px;background:var(--surface-container-low);border-radius:10px;border:1px solid var(--outline-variant);">
+                            <div style="font-size:12px;font-weight:700;color:var(--on-surface-variant);text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px;">Playback</div>
+                            <div style="display:flex;flex-direction:column;gap:8px;font-size:13px;">
+                                <div style="display:flex;justify-content:space-between;"><span>Play / Pause</span><kbd style="background:var(--surface-container);border:1px solid var(--outline-variant);border-radius:4px;padding:2px 8px;font-family:monospace;font-size:11px;">Space</kbd></div>
+                                <div style="display:flex;justify-content:space-between;"><span>Frame Back</span><kbd style="background:var(--surface-container);border:1px solid var(--outline-variant);border-radius:4px;padding:2px 8px;font-family:monospace;font-size:11px;">←</kbd></div>
+                                <div style="display:flex;justify-content:space-between;"><span>Frame Forward</span><kbd style="background:var(--surface-container);border:1px solid var(--outline-variant);border-radius:4px;padding:2px 8px;font-family:monospace;font-size:11px;">→</kbd></div>
+                            </div>
+                        </div>
+                        <div style="padding:14px;background:var(--surface-container-low);border-radius:10px;border:1px solid var(--outline-variant);">
+                            <div style="font-size:12px;font-weight:700;color:var(--on-surface-variant);text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px;">Editing</div>
+                            <div style="display:flex;flex-direction:column;gap:8px;font-size:13px;">
+                                <div style="display:flex;justify-content:space-between;"><span>Undo</span><kbd style="background:var(--surface-container);border:1px solid var(--outline-variant);border-radius:4px;padding:2px 8px;font-family:monospace;font-size:11px;">Ctrl+Z</kbd></div>
+                                <div style="display:flex;justify-content:space-between;"><span>Redo</span><kbd style="background:var(--surface-container);border:1px solid var(--outline-variant);border-radius:4px;padding:2px 8px;font-family:monospace;font-size:11px;">Ctrl+Y</kbd></div>
+                                <div style="display:flex;justify-content:space-between;"><span>Split Clip</span><kbd style="background:var(--surface-container);border:1px solid var(--outline-variant);border-radius:4px;padding:2px 8px;font-family:monospace;font-size:11px;">S</kbd></div>
+                            </div>
+                        </div>
+                        <div style="padding:14px;background:var(--surface-container-low);border-radius:10px;border:1px solid var(--outline-variant);">
+                            <div style="font-size:12px;font-weight:700;color:var(--on-surface-variant);text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px;">Project</div>
+                            <div style="display:flex;flex-direction:column;gap:8px;font-size:13px;">
+                                <div style="display:flex;justify-content:space-between;"><span>New Project</span><kbd style="background:var(--surface-container);border:1px solid var(--outline-variant);border-radius:4px;padding:2px 8px;font-family:monospace;font-size:11px;">Ctrl+N</kbd></div>
+                                <div style="display:flex;justify-content:space-between;"><span>Save Project</span><kbd style="background:var(--surface-container);border:1px solid var(--outline-variant);border-radius:4px;padding:2px 8px;font-family:monospace;font-size:11px;">Ctrl+S</kbd></div>
+                                <div style="display:flex;justify-content:space-between;"><span>Export</span><kbd style="background:var(--surface-container);border:1px solid var(--outline-variant);border-radius:4px;padding:2px 8px;font-family:monospace;font-size:11px;">Ctrl+E</kbd></div>
+                            </div>
+                        </div>
+                        <div style="padding:14px;background:var(--surface-container-low);border-radius:10px;border:1px solid var(--outline-variant);">
+                            <div style="font-size:12px;font-weight:700;color:var(--on-surface-variant);text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px;">Timeline</div>
+                            <div style="display:flex;flex-direction:column;gap:8px;font-size:13px;">
+                                <div style="display:flex;justify-content:space-between;"><span>Select All</span><kbd style="background:var(--surface-container);border:1px solid var(--outline-variant);border-radius:4px;padding:2px 8px;font-family:monospace;font-size:11px;">Ctrl+A</kbd></div>
+                                <div style="display:flex;justify-content:space-between;"><span>Delete Selected</span><kbd style="background:var(--surface-container);border:1px solid var(--outline-variant);border-radius:4px;padding:2px 8px;font-family:monospace;font-size:11px;">Del</kbd></div>
+                                <div style="display:flex;justify-content:space-between;"><span>Add Marker</span><kbd style="background:var(--surface-container);border:1px solid var(--outline-variant);border-radius:4px;padding:2px 8px;font-family:monospace;font-size:11px;">M</kbd></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div><!-- /content -->
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════
+         EDITOR SHELL (hidden initially)
+         ═══════════════════════════════════════ -->
+    <div id="fc-editor-shell" style="display:none;flex-direction:column;height:100%;width:100%;">
+
+        <!-- The entire editor gets a wrapper div for backstage blur effect -->
+        <div id="fc-editor-behind" style="display:flex;flex-direction:column;flex:1;overflow:hidden;">
+
+            <!-- Top Ribbon Navigation Header Component -->
+            <forgecut-header></forgecut-header>
+            
+            <!-- Main Workspace Layout -->
+            <main class="flex flex-1 overflow-hidden relative bg-background">
+                
+                <!-- Left Sidebar Component -->
+                <forgecut-sidebar></forgecut-sidebar>
+                
+                <!-- Left Sidebar Resizer Divider -->
+                <div id="left-resizer" class="w-1 bg-outline-variant/30 hover:bg-primary cursor-col-resize transition-colors z-40"></div>
+                
+                <!-- Center Preview and Timeline Section -->
+                <section class="flex-grow flex flex-col overflow-hidden bg-background">
+                    
+                    <!-- Canvas Preview Component -->
+                    <forgecut-preview class="flex-grow flex flex-col min-h-0"></forgecut-preview>
+                    
+                    <!-- Timeline Component -->
+                    <forgecut-timeline></forgecut-timeline>
+                    
+                </section>
+                
+                <!-- Right Sidebar Resizer Divider -->
+                <div id="right-resizer" class="w-1 bg-outline-variant/30 hover:bg-primary cursor-col-resize transition-colors z-40"></div>
+                
+                <!-- Right Sidebar Export Queue Component -->
+                <forgecut-export-queue></forgecut-export-queue>
+                
+            </main>
+            
+            <!-- Footer Status Bar -->
+            <footer class="bg-surface-container h-8 flex justify-between items-center px-4 border-t border-outline-variant z-50 select-none">
+                <div class="flex items-center gap-6">
+                    <div class="flex items-center gap-2">
+                        <div class="w-2 h-2 rounded-full bg-[#4CAF50]"></div>
+                        <span class="font-status-bar text-status-bar text-on-surface-variant">System Ready</span>
+                    </div>
+                    <span class="font-status-bar text-status-bar text-on-surface-variant">Project: <span class="font-medium text-on-surface" id="footerProjectName" title="Double-click to rename">Untitled Project</span></span>
+                    <span class="font-status-bar text-status-bar text-on-surface-variant">Resolution: <span class="font-medium text-on-surface" id="footerResolution">1080x1920</span></span>
+                    <span class="font-status-bar text-status-bar text-on-surface-variant">FPS: <span class="font-medium text-on-surface" id="footerFps">30</span></span>
+                </div>
+                <div class="flex items-center gap-4">
+                    <span class="font-status-bar text-status-bar text-on-surface-variant select-none" id="footerZoomLabel">20%</span>
+                    <div class="flex items-center gap-2 w-32 group">
+                        <span class="material-symbols-outlined text-xs text-on-surface-variant cursor-pointer" onclick="adjustZoom(-5)">remove</span>
+                        <input type="range" id="footerZoomSlider" min="5" max="100" value="20" class="flex-1 h-1 bg-surface-container-highest rounded-full overflow-hidden accent-primary cursor-pointer">
+                        <span class="material-symbols-outlined text-xs text-on-surface-variant cursor-pointer" onclick="adjustZoom(5)">add</span>
+                    </div>
+                    <div class="h-4 w-px bg-outline-variant/30"></div>
+                    <span class="material-symbols-outlined text-on-surface-variant hover:text-primary cursor-pointer text-sm" onclick="setTime(0)">fit_screen</span>
+                </div>
+            </footer>
+            
+            <!-- Bulk Production Bottom Drawer Panel -->
+            <forgecut-bulk-drawer></forgecut-bulk-drawer>
+
+        </div><!-- /fc-editor-behind -->
+    </div><!-- /fc-editor-shell -->
+    
+    <!-- Full Backstage Manager Modal Overlay Component -->
+    <forgecut-backstage></forgecut-backstage>
+    
+    <!-- Dynamic Variations Batch Gallery Overlay Component -->
+    <forgecut-batch-gallery></forgecut-batch-gallery>
+
+    <!-- Load ForgeCut Engine Modules -->
+    <script src="engine/MediaEngine.js"></script>
+    <script src="engine/AudioEngine.js"></script>
+    <script src="engine/PlaybackEngine.js"></script>
+    <script src="engine/ShapeRenderer.js"></script>
+    <script src="engine/TextRenderer.js"></script>
+    <script src="engine/TransitionEngine.js"></script>
+    <script src="engine/AnimationEngine.js"></script>
+    <script src="engine/ExportEngine.js"></script>
+    <script src="engine/HistoryManager.js"></script>
+    <script src="engine/KeyboardShortcuts.js"></script>
+
+    <!-- Main Logic Scripts -->
+    <script src="ui.js"></script>
+    <script src="editor.js"></script>
+</body>
+</html>

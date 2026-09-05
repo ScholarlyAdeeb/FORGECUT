@@ -1,0 +1,544 @@
+<!DOCTYPE html><html lang="en" class="light"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@100..700&amp;display=swap" rel="stylesheet"><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=block" rel="stylesheet"><script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script><script id="tailwind-config">try{
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "tertiary-container": "#bc5b00",
+                        "inverse-surface": "#2d3137",
+                        "on-error-container": "#93000a",
+                        "primary-fixed": "#d3e3ff",
+                        "surface-container-lowest": "#ffffff",
+                        "primary": "#005faa",
+                        "on-tertiary-fixed-variant": "#743500",
+                        "on-secondary": "#ffffff",
+                        "on-primary-container": "#ffffff",
+                        "on-tertiary": "#ffffff",
+                        "surface-container": "#ebeef6",
+                        "on-secondary-container": "#606365",
+                        "surface": "#f8f9ff",
+                        "on-primary-fixed-variant": "#004883",
+                        "on-tertiary-container": "#ffffff",
+                        "on-surface": "#181c22",
+                        "on-primary": "#ffffff",
+                        "secondary-fixed-dim": "#c5c7c8",
+                        "surface-container-highest": "#e0e2ea",
+                        "background": "#f8f9ff",
+                        "tertiary-fixed-dim": "#ffb689",
+                        "surface-tint": "#0060ab",
+                        "surface-variant": "#e0e2ea",
+                        "secondary": "#5c5f60",
+                        "on-secondary-fixed": "#191c1e",
+                        "on-error": "#ffffff",
+                        "inverse-primary": "#a3c9ff",
+                        "surface-dim": "#d7dae2",
+                        "surface-bright": "#f8f9ff",
+                        "secondary-fixed": "#e1e2e4",
+                        "outline": "#717783",
+                        "on-tertiary-fixed": "#311300",
+                        "primary-container": "#0078d4",
+                        "surface-container-low": "#f1f3fc",
+                        "on-primary-fixed": "#001c39",
+                        "inverse-on-surface": "#eef0f9",
+                        "primary-fixed-dim": "#a3c9ff",
+                        "tertiary": "#974700",
+                        "tertiary-fixed": "#ffdbc8",
+                        "error-container": "#ffdad6",
+                        "secondary-container": "#dee0e2",
+                        "outline-variant": "#c0c7d4",
+                        "on-surface-variant": "#404752"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "sidebar_width": "240px",
+                        "gutter": "1px",
+                        "ribbon_group_padding": "12px",
+                        "panel_padding": "16px",
+                        "ribbon_height": "140px",
+                        "export_queue_width": "320px",
+                        "timeline_height": "300px",
+                        "element_gap": "8px"
+                    },
+                    "fontFamily": {
+                        "timeline-timecode": ["Libre Franklin"],
+                        "ribbon-tab": ["Libre Franklin"],
+                        "label-sm": ["Libre Franklin"],
+                        "panel-header": ["Libre Franklin"],
+                        "status-bar": ["Libre Franklin"],
+                        "body-md": ["Libre Franklin"],
+                        "ribbon-group-label": ["Libre Franklin"]
+                    },
+                    "fontSize": {
+                        "timeline-timecode": ["11px", {"lineHeight": "14px", "letterSpacing": "0.05em", "fontWeight": "400"}],
+                        "ribbon-tab": ["14px", {"lineHeight": "20px", "fontWeight": "500"}],
+                        "label-sm": ["12px", {"lineHeight": "16px", "fontWeight": "400"}],
+                        "panel-header": ["14px", {"lineHeight": "24px", "fontWeight": "600"}],
+                        "status-bar": ["11px", {"lineHeight": "16px", "fontWeight": "400"}],
+                        "body-md": ["13px", {"lineHeight": "18px", "fontWeight": "400"}],
+                        "ribbon-group-label": ["11px", {"lineHeight": "16px", "letterSpacing": "0.02em", "fontWeight": "400"}]
+                    }
+                },
+            },
+        }
+    }catch(_e){}</script><meta charset="utf-8"></head><body class="bg-background text-on-surface font-body-md overflow-hidden h-screen flex flex-col">
+<!-- Top Ribbon Navigation -->
+<header class="bg-surface border-b border-outline-variant flex flex-col w-full z-50">
+<!-- Title Bar (Native App Feel) -->
+<div class="flex justify-between items-center px-4 h-10 bg-surface">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">movie_edit</span>
+<span class="font-panel-header text-panel-header font-bold text-on-surface">ForgeCut</span>
+</div>
+<div class="flex items-center gap-6">
+<span class="material-symbols-outlined text-on-surface-variant hover:text-on-surface cursor-pointer">settings</span>
+<span class="material-symbols-outlined text-on-surface-variant hover:text-on-surface cursor-pointer">help</span>
+<div class="flex gap-4 ml-4">
+<span class="material-symbols-outlined text-on-surface-variant cursor-pointer text-sm">minimize</span>
+<span class="material-symbols-outlined text-on-surface-variant cursor-pointer text-sm">check_box_outline_blank</span>
+<span class="material-symbols-outlined text-on-surface-variant hover:text-error cursor-pointer text-sm">close</span>
+</div>
+</div>
+</div>
+<!-- Ribbon Tabs -->
+<nav class="flex items-center px-2 h-9">
+<div class="flex items-center h-full">
+<button class="px-4 h-full font-ribbon-tab text-ribbon-tab text-on-surface-variant hover:bg-surface-container-high transition-colors">File</button>
+<button class="px-4 h-full font-ribbon-tab text-ribbon-tab text-on-surface-variant hover:bg-surface-container-high transition-colors">Home</button>
+<button class="px-4 h-full font-ribbon-tab text-ribbon-tab text-on-surface-variant hover:bg-surface-container-high transition-colors">Insert</button>
+<button class="px-4 h-full font-ribbon-tab text-ribbon-tab text-on-surface-variant hover:bg-surface-container-high transition-colors">Draw</button>
+<button class="px-4 h-full font-ribbon-tab text-ribbon-tab text-on-surface-variant hover:bg-surface-container-high transition-colors">Design</button>
+<button class="px-4 h-full font-ribbon-tab text-ribbon-tab text-primary border-b-2 border-primary font-bold">Transitions</button>
+<button class="px-4 h-full font-ribbon-tab text-ribbon-tab text-on-surface-variant hover:bg-surface-container-high transition-colors">Animations</button>
+<button class="px-4 h-full font-ribbon-tab text-ribbon-tab text-on-surface-variant hover:bg-surface-container-high transition-colors">Slide Show</button>
+<button class="px-4 h-full font-ribbon-tab text-ribbon-tab text-on-surface-variant hover:bg-surface-container-high transition-colors">Review</button>
+<button class="px-4 h-full font-ribbon-tab text-ribbon-tab text-on-surface-variant hover:bg-surface-container-high transition-colors">View</button>
+<button class="px-4 h-full font-ribbon-tab text-ribbon-tab text-on-surface-variant hover:bg-surface-container-high transition-colors">Help</button>
+</div>
+</nav>
+<!-- Ribbon Groups (Insert Tab) -->
+<div class="flex items-stretch bg-surface-container-low h-24 px-2 py-1 overflow-x-auto border-t border-outline-variant"><!-- Group: Transition Gallery -->
+<div class="flex flex-col justify-between items-center px-2 min-w-max">
+    <div class="flex gap-2 items-center flex-1 overflow-x-auto max-w-4xl">
+        <button class="flex flex-col items-center gap-1 hover:bg-surface-container-highest p-1 rounded transition-colors min-w-[60px]">
+            <span class="material-symbols-outlined text-2xl text-on-surface-variant">block</span>
+            <span class="text-[10px] text-on-surface">None</span>
+        </button>
+        <button class="flex flex-col items-center gap-1 hover:bg-surface-container-highest p-1 rounded transition-colors min-w-[60px]">
+            <span class="material-symbols-outlined text-2xl text-primary">auto_fix_high</span>
+            <span class="text-[10px] text-on-surface">Morph</span>
+        </button>
+        <button class="flex flex-col items-center gap-1 hover:bg-surface-container-highest p-1 rounded transition-colors min-w-[60px]">
+            <span class="material-symbols-outlined text-2xl text-primary">blur_on</span>
+            <span class="text-[10px] text-on-surface">Fade</span>
+        </button>
+        <button class="flex flex-col items-center gap-1 hover:bg-surface-container-highest p-1 rounded transition-colors min-w-[60px]">
+            <span class="material-symbols-outlined text-2xl text-primary">arrow_upward</span>
+            <span class="text-[10px] text-on-surface">Push</span>
+        </button>
+        <button class="flex flex-col items-center gap-1 hover:bg-surface-container-highest p-1 rounded transition-colors min-w-[60px]">
+            <span class="material-symbols-outlined text-2xl text-primary">cleaning_services</span>
+            <span class="text-[10px] text-on-surface">Wipe</span>
+        </button>
+        <button class="flex flex-col items-center gap-1 hover:bg-surface-container-highest p-1 rounded transition-colors min-w-[60px]">
+            <span class="material-symbols-outlined text-2xl text-primary">vertical_split</span>
+            <span class="text-[10px] text-on-surface">Split</span>
+        </button>
+        <button class="flex flex-col items-center gap-1 hover:bg-surface-container-highest p-1 rounded transition-colors min-w-[60px]">
+            <span class="material-symbols-outlined text-2xl text-primary">visibility</span>
+            <span class="text-[10px] text-on-surface">Reveal</span>
+        </button>
+        <button class="flex flex-col items-center gap-1 hover:bg-surface-container-highest p-1 rounded transition-colors min-w-[60px]">
+            <span class="material-symbols-outlined text-2xl text-primary">content_cut</span>
+            <span class="text-[10px] text-on-surface">Cut</span>
+        </button>
+        <button class="flex flex-col items-center gap-1 hover:bg-surface-container-highest p-1 rounded transition-colors min-w-[60px]">
+            <span class="material-symbols-outlined text-2xl text-primary">reorder</span>
+            <span class="text-[10px] text-on-surface">Random Bars</span>
+        </button>
+    </div>
+    <span class="font-ribbon-group-label text-ribbon-group-label text-on-surface-variant mt-1">Transition to This Clip</span>
+</div>
+<div class="ribbon-divider"></div>
+<!-- Group: Timing -->
+<div class="flex flex-col justify-between items-center px-2 min-w-max">
+    <div class="flex flex-col gap-1 flex-1 justify-center">
+        <div class="flex items-center gap-2">
+            <span class="text-[11px] w-12">Sound:</span>
+            <div class="flex items-center gap-1 border border-outline-variant px-2 py-0.5 rounded bg-white text-[11px] w-24">
+                <span class="truncate">[No Sound]</span>
+                <span class="material-symbols-outlined text-xs">expand_more</span>
+            </div>
+        </div>
+        <div class="flex items-center gap-2">
+            <span class="text-[11px] w-12">Duration:</span>
+            <div class="flex items-center border border-outline-variant rounded bg-white">
+                <input type="text" value="01.00" class="w-16 text-[11px] px-1 border-none focus:ring-0">
+                <div class="flex flex-col border-l border-outline-variant">
+                    <span class="material-symbols-outlined text-[10px] cursor-pointer hover:bg-surface-container-high">keyboard_arrow_up</span>
+                    <span class="material-symbols-outlined text-[10px] cursor-pointer hover:bg-surface-container-high">keyboard_arrow_down</span>
+                </div>
+            </div>
+        </div>
+        <button class="flex items-center gap-1 hover:bg-surface-container-highest px-2 py-0.5 rounded transition-colors">
+            <span class="material-symbols-outlined text-sm text-primary">done_all</span>
+            <span class="text-[11px]">Apply To All</span>
+        </button>
+    </div>
+    <span class="font-ribbon-group-label text-ribbon-group-label text-on-surface-variant mt-1">Timing</span>
+</div>
+<div class="ribbon-divider"></div>
+<!-- Group: Advance Clip -->
+<div class="flex flex-col justify-between items-center px-2 min-w-max">
+    <div class="flex flex-col gap-1 flex-1 justify-center">
+        <label class="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" checked="" class="w-3 h-3 rounded border-outline-variant text-primary focus:ring-primary">
+            <span class="text-[11px]">On Mouse Click</span>
+        </label>
+        <div class="flex items-center gap-2">
+            <input type="checkbox" class="w-3 h-3 rounded border-outline-variant text-primary focus:ring-primary">
+            <span class="text-[11px]">After:</span>
+            <div class="flex items-center border border-outline-variant rounded bg-white">
+                <input type="text" value="00:00.00" class="w-20 text-[11px] px-1 border-none focus:ring-0">
+            </div>
+        </div>
+    </div>
+    <span class="font-ribbon-group-label text-ribbon-group-label text-on-surface-variant mt-1">Advance Clip</span>
+</div>
+<!-- Export / Preview Buttons -->
+<div class="ml-auto flex items-center gap-3 pr-4">
+    <button class="flex items-center gap-2 px-4 py-2 hover:bg-surface-container-highest transition-colors rounded-lg">
+        <span class="material-symbols-outlined">play_circle</span>
+        <span class="font-medium">Preview</span>
+    </button>
+    <button class="flex items-center gap-2 px-6 py-2 bg-primary-container text-on-primary-container font-bold rounded-lg hover:shadow-lg transition-all active:scale-95">
+        <span class="material-symbols-outlined">upload</span>
+        <span class="">Export</span>
+    </button>
+</div></div>
+</header>
+<!-- Main Workspace -->
+<main class="flex flex-1 overflow-hidden">
+<!-- Left Sidebar: Project Explorer -->
+<aside class="w-sidebar_width bg-surface-container-low border-r border-outline-variant flex flex-col p-0">
+<div class="p-4 border-b border-outline-variant">
+<h2 class="font-panel-header text-panel-header font-semibold text-on-surface">Project</h2>
+</div>
+<nav class="flex flex-col p-2 gap-1 overflow-y-auto flex-1 custom-scrollbar">
+<button class="flex items-center gap-3 p-3 bg-primary-container text-on-primary-container font-bold rounded-lg">
+<span class="material-symbols-outlined">perm_media</span>
+<span class="font-label-sm text-label-sm">Media</span>
+</button>
+<button class="flex items-center gap-3 p-3 text-on-surface-variant hover:bg-surface-container-highest transition-colors rounded-lg">
+<span class="material-symbols-outlined">audiotrack</span>
+<span class="font-label-sm text-label-sm">Audio</span>
+</button>
+<button class="flex items-center gap-3 p-3 text-on-surface-variant hover:bg-surface-container-highest transition-colors rounded-lg">
+<span class="material-symbols-outlined">title</span>
+<span class="font-label-sm text-label-sm">Text</span>
+</button>
+<button class="flex items-center gap-3 p-3 text-on-surface-variant hover:bg-surface-container-highest transition-colors rounded-lg">
+<span class="material-symbols-outlined">category</span>
+<span class="font-label-sm text-label-sm">Shapes</span>
+</button>
+<button class="flex items-center gap-3 p-3 text-on-surface-variant hover:bg-surface-container-highest transition-colors rounded-lg">
+<span class="material-symbols-outlined">animation</span>
+<span class="font-label-sm text-label-sm">Transitions</span>
+</button>
+<button class="flex items-center gap-3 p-3 text-on-surface-variant hover:bg-surface-container-highest transition-colors rounded-lg">
+<span class="material-symbols-outlined">auto_awesome_motion</span>
+<span class="font-label-sm text-label-sm">Templates</span>
+</button>
+</nav>
+<!-- Project Thumbnail / Small Detail -->
+<div class="p-4 bg-surface border-t border-outline-variant">
+<div class="aspect-video bg-inverse-surface rounded-lg mb-2 relative group overflow-hidden">
+<img class="w-full h-full object-cover opacity-60" data-alt="A cinematic, high-definition frame of a professional video editing software workspace preview. The scene shows a vibrant landscape with lush green forests and misty mountains under a soft, golden hour sky. The lighting is ethereal and crisp, with a cool blue and warm orange color palette. The image style is polished and professional, mimicking a high-end desktop application preview." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAuTyFGdW8DrRk1hPC6PXpMnZ41OS5og95fdNVgt07MGTEurWhAlAj4ej1abvxEIMtUQkYNZKK4deREC3QQpWTHMUYQKCXFaem8J92mBKLaZoR0LdUMjivc5VXcvb9NFZ-9GHDfmvJS3ofXR4A1kR_j5L4oNWfuTiLFE4NBaTQYJDCsgd2zA81Wt10rpMf2IEWKc6FKAUZpNzakVTLeP2hLvxCUZ6uIHSW8_BH7IklV6jytz5MhmLku">
+<div class="absolute inset-0 flex items-center justify-center">
+<span class="material-symbols-outlined text-white text-3xl">play_arrow</span>
+</div>
+</div>
+<p class="text-[11px] font-medium text-on-surface truncate">Main Montage.mp4</p>
+<p class="text-[10px] text-on-surface-variant">1080p • 24fps • 14s</p>
+</div>
+</aside>
+<!-- Center Area: Preview Canvas & Timeline -->
+<section class="flex-1 flex flex-col overflow-hidden bg-background">
+<!-- Canvas Preview -->
+<div class="flex-1 p-6 flex flex-col">
+<div class="flex-1 bg-[#121212] rounded-xl shadow-2xl relative overflow-hidden group border border-outline/20">
+<!-- Preview Placeholder -->
+<div class="absolute inset-0 flex items-center justify-center">
+
+<div class="z-10 flex flex-col items-center gap-4">
+<span class="material-symbols-outlined text-6xl text-white/10">videocam_off</span>
+<span class="text-white/20 font-medium tracking-widest text-xs uppercase">Rendering Workspace...</span>
+</div>
+</div>
+<!-- Overlay Controls (Hidden by default, shown on hover) -->
+<div class="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
+<div class="w-full h-1 bg-white/20 rounded-full mb-4">
+<div class="h-full bg-primary w-1/3 rounded-full relative">
+<div class="absolute -right-1.5 -top-1.5 w-4 h-4 bg-white rounded-full shadow-lg border-2 border-primary"></div>
+</div>
+</div>
+</div>
+</div>
+<!-- Playback Controls Bar -->
+<div class="h-16 flex items-center justify-between px-4 mt-2 bg-surface-container-lowest border border-outline-variant rounded-lg shadow-sm">
+<div class="flex items-center gap-4">
+<button class="material-symbols-outlined hover:text-primary transition-colors">skip_previous</button>
+<button class="material-symbols-outlined text-3xl hover:text-primary transition-colors" style="font-variation-settings: 'FILL' 1;">play_circle</button>
+<button class="material-symbols-outlined hover:text-primary transition-colors">skip_next</button>
+<div class="ml-4 font-timeline-timecode text-timeline-timecode text-on-surface-variant">
+<span class="text-on-surface font-bold">00:00:00</span> / 00:00:14
+                        </div>
+</div>
+<div class="flex items-center gap-6">
+<div class="flex items-center gap-2 border border-outline-variant px-3 py-1 rounded hover:bg-surface-container-low cursor-pointer">
+<span class="text-xs font-medium">Fit to Screen</span>
+<span class="material-symbols-outlined text-sm">expand_more</span>
+</div>
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-on-surface-variant">volume_up</span>
+<div class="w-24 h-1 bg-surface-container-highest rounded-full overflow-hidden">
+<div class="bg-primary h-full w-3/4"></div>
+</div>
+</div>
+<button class="material-symbols-outlined text-on-surface-variant hover:text-on-surface">fullscreen</button>
+</div>
+</div>
+</div>
+<!-- Timeline Panel -->
+<div class="h-timeline_height bg-surface border-t border-outline-variant flex flex-col">
+<div class="h-10 border-b border-outline-variant flex items-center px-4 justify-between bg-surface-container-low">
+<div class="flex items-center gap-4">
+<button class="material-symbols-outlined text-on-surface-variant hover:text-on-surface">near_me</button>
+<button class="material-symbols-outlined text-on-surface-variant hover:text-on-surface">undo</button>
+<button class="material-symbols-outlined text-on-surface-variant hover:text-on-surface">redo</button>
+<div class="h-4 w-px bg-outline-variant"></div>
+<button class="material-symbols-outlined text-on-surface-variant hover:text-on-surface">content_cut</button>
+<button class="material-symbols-outlined text-on-surface-variant hover:text-on-surface">delete</button>
+</div>
+<div class="flex items-center gap-4">
+<button class="material-symbols-outlined text-on-surface-variant hover:text-on-surface">straighten</button>
+<button class="material-symbols-outlined text-on-surface-variant hover:text-on-surface" data-original-icon="magnet">circle</button>
+<button class="material-symbols-outlined text-on-surface-variant hover:text-on-surface">zoom_in</button>
+</div>
+</div>
+<div class="flex-1 flex overflow-hidden">
+<!-- Track Headers -->
+<div class="w-48 flex flex-col border-r border-outline-variant bg-surface-container-low">
+<!-- Track 1 -->
+<div class="h-16 border-b border-outline-variant px-3 flex flex-col justify-center gap-1 group">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="w-5 h-5 rounded bg-tertiary-container text-[10px] flex items-center justify-center text-white font-bold">T</span>
+<span class="text-xs font-bold truncate">Text Track 1</span>
+</div>
+<div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+<span class="material-symbols-outlined text-xs cursor-pointer hover:text-primary">lock</span>
+<span class="material-symbols-outlined text-xs cursor-pointer hover:text-primary">visibility</span>
+</div>
+</div>
+</div>
+<!-- Track 2 -->
+<div class="h-16 border-b border-outline-variant px-3 flex flex-col justify-center gap-1 group">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="w-5 h-5 rounded bg-primary-container text-[10px] flex items-center justify-center text-white font-bold">V</span>
+<span class="text-xs font-bold truncate">Video Track 2</span>
+</div>
+<div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+<span class="material-symbols-outlined text-xs cursor-pointer">lock</span>
+<span class="material-symbols-outlined text-xs cursor-pointer">visibility</span>
+</div>
+</div>
+</div>
+<!-- Track 3 -->
+<div class="h-16 border-b border-outline-variant px-3 flex flex-col justify-center gap-1 group">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="w-5 h-5 rounded bg-primary-container text-[10px] flex items-center justify-center text-white font-bold">V</span>
+<span class="text-xs font-bold truncate">Video Track 1</span>
+</div>
+<div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+<span class="material-symbols-outlined text-xs cursor-pointer">lock</span>
+<span class="material-symbols-outlined text-xs cursor-pointer">visibility</span>
+</div>
+</div>
+</div>
+<!-- Track 4 -->
+<div class="h-16 border-b border-outline-variant px-3 flex flex-col justify-center gap-1 group">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="w-5 h-5 rounded bg-[#4CAF50] text-[10px] flex items-center justify-center text-white font-bold">A</span>
+<span class="text-xs font-bold truncate">Audio Track 1</span>
+</div>
+<div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+<span class="material-symbols-outlined text-xs cursor-pointer">lock</span>
+<span class="material-symbols-outlined text-xs cursor-pointer">visibility</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Timeline Body -->
+<div class="flex-1 bg-surface-container relative overflow-hidden timeline-track-bg">
+<!-- Time Ruler -->
+<div class="h-6 border-b border-outline-variant flex items-end px-2 bg-surface-container-low">
+<span class="text-[9px] font-timeline-timecode text-on-surface-variant w-10">00:00</span>
+<span class="text-[9px] font-timeline-timecode text-on-surface-variant w-10 ml-10">00:02</span>
+<span class="text-[9px] font-timeline-timecode text-on-surface-variant w-10 ml-10">00:04</span>
+<span class="text-[9px] font-timeline-timecode text-on-surface-variant w-10 ml-10">00:06</span>
+<span class="text-[9px] font-timeline-timecode text-on-surface-variant w-10 ml-10">00:08</span>
+<span class="text-[9px] font-timeline-timecode text-on-surface-variant w-10 ml-10">00:10</span>
+<span class="text-[9px] font-timeline-timecode text-on-surface-variant w-10 ml-10">00:12</span>
+</div>
+<!-- Empty State Illustration -->
+<div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none opacity-40 mt-6">
+<span class="material-symbols-outlined text-5xl mb-2">add_to_photos</span>
+<p class="text-xs font-medium">Drag media here to start editing</p>
+</div>
+<!-- Playhead -->
+<div class="absolute top-0 bottom-0 left-0 w-px bg-primary z-20 group cursor-ew-resize">
+<div class="absolute -top-1 -left-1.5 w-3 h-4 bg-primary rounded-t shadow-md"></div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Right Sidebar: Export Queue -->
+<aside class="w-export_queue_width bg-surface-container border-l border-outline-variant flex flex-col overflow-hidden">
+<div class="p-4 bg-surface border-b border-outline-variant flex justify-between items-center">
+<div class="flex gap-4">
+<button class="font-panel-header text-panel-header text-primary border-b-2 border-primary pb-1">Preview</button>
+<button class="font-panel-header text-panel-header text-on-surface-variant pb-1">Export Queue</button>
+</div>
+</div>
+<div class="flex-1 overflow-y-auto p-4 flex flex-col gap-4 custom-scrollbar">
+<div class="flex justify-between items-center mb-2">
+<span class="text-xs font-semibold text-on-surface-variant">Batch Export (4 items)</span>
+<div class="flex gap-2">
+<button class="p-1 hover:bg-surface-container-highest rounded"><span class="material-symbols-outlined text-sm">select_all</span></button>
+<button class="p-1 hover:bg-surface-container-highest rounded"><span class="material-symbols-outlined text-sm">add_box</span></button>
+</div>
+</div>
+<!-- Export Clip Grid -->
+<div class="grid grid-cols-2 gap-3">
+<!-- Clip 1 -->
+<div class="flex flex-col gap-1 relative group">
+<div class="aspect-[9/16] bg-black rounded-lg overflow-hidden border-2 border-transparent hover:border-primary-container transition-all cursor-pointer">
+<img class="w-full h-full object-cover opacity-90 group-hover:opacity-100" data-alt="A vertical video clip thumbnail for a high-end social media video. It features a stylish person walking through an urban setting with modern architecture and glass buildings. The person is wearing a long trench coat and holding a coffee cup, looking casually elegant. The lighting is bright daylight with soft shadows, creating a premium lifestyle aesthetic. The color palette includes cream, navy, and charcoal tones." src="https://lh3.googleusercontent.com/aida-public/AB6AXuANiTt_hf74tzryZm1G3KrSO3gpkwPPgS5F8-8XTRVriSHj6kXjYQx1fEFy3Ra9g4V0iIUkjyXjX5U6b6wNFZPz6PXT0ZERgIAMha_Zp8q8vjKhqe15QgYyvCLSZyzejDz-eEBj5b35YjWBwcT-PL7s_kOOBbfx-x_awh1nsWgFBJx0fsZVfA3ReJ1B58znGJN5nf7uRasgZft2oQRnM4VD9mFi4epc2ZCJfINqeq2dROpda3iR3YFj">
+<div class="absolute top-2 left-2 flex items-center justify-center w-5 h-5 bg-white rounded border border-outline-variant"></div>
+<div class="absolute top-2 right-2 flex items-center justify-center w-6 h-6 bg-black/40 rounded-full text-white backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity">
+<span class="material-symbols-outlined text-xs">more_vert</span>
+</div>
+</div>
+<span class="text-[10px] font-medium text-center truncate">Clip 01 - Intro</span>
+</div>
+<!-- Clip 2 (Selected) -->
+<div class="flex flex-col gap-1 relative group">
+<div class="aspect-[9/16] bg-black rounded-lg overflow-hidden border-2 border-primary transition-all cursor-pointer relative shadow-lg shadow-primary/20">
+<img class="w-full h-full object-cover" data-alt="A vertical video clip thumbnail showcasing a close-up of high-end details in a modern environment. A sleek, stainless steel coffee machine is shown in a bright, minimalist kitchen with marble countertops. The scene is illuminated with clean, daylight-style studio lighting, highlighting textures and metallic finishes. The aesthetic is extremely polished, professional, and sophisticated, dominated by whites, grays, and silver tones." src="https://lh3.googleusercontent.com/aida-public/AB6AXuC3vx5vN4aso8SGv2MeNWeTDAnfsq_JRw6hkpbJuO8HP6PqzqdE01TRIwWTr3L0omtPl94HsEpu86UI5CX7AdoE_KrNuYJwIGNk-BAD1_JCXUQll6joNFHTEF74Rw8ShvxUZEteBShz8VOczfcfydAJCK4XrQgreV8E6t6ieY9MZu1BS0nZGKnmP0tJ8PQXmf4Krbw4a1o9b7fhCICtQ0bGhj9FqhwTmGxIEPaDw0p5GyG9nCRBp_zO">
+<div class="absolute top-2 left-2 flex items-center justify-center w-5 h-5 bg-primary rounded border border-primary text-white">
+<span class="material-symbols-outlined text-xs">check</span>
+</div>
+</div>
+<span class="text-[10px] font-bold text-center truncate text-primary">Clip 02 - Transit</span>
+</div>
+<!-- Clip 3 -->
+<div class="flex flex-col gap-1 relative group">
+<div class="aspect-[9/16] bg-black rounded-lg overflow-hidden border-2 border-transparent hover:border-primary-container transition-all cursor-pointer">
+<img class="w-full h-full object-cover opacity-90" data-alt="A vertical video clip thumbnail capturing an atmospheric urban sunset. The frame shows the silhouettes of skyscrapers against a vibrant, orange and purple sky. Streetlights are beginning to glow, creating points of warm light against the cooling cityscape. The style is cinematic and evocative, with a rich, saturated color palette that emphasizes depth and evening mood. The aesthetic is professional and high-definition." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCF3u1CX6C4MiiuXuy0zMHsr5Z4NTDDe0KWGKWn7_awK4iSmp2ZWsVcYZQBexXBsjXd1-A1UinO73kjB4SbRuAY3OI_dVX4YrWwEf6GpfnEEdjv1QhkBN3AUJeE7TqLU8BHCZ6q_vcslFmzT_W28CNTlCTnfHPFbr7e0lXt52CjUHES96KkfxTw48o7C_yReYagqSv551iyKMqAuUbk3GDB2oXnXhlDUvBDGOkjKa7-ITXBsqxIkD2n">
+<div class="absolute top-2 left-2 flex items-center justify-center w-5 h-5 bg-white rounded border border-outline-variant"></div>
+</div>
+<span class="text-[10px] font-medium text-center truncate">Clip 03 - Sunset</span>
+</div>
+<!-- Add New Button -->
+<div class="aspect-[9/16] border-2 border-dashed border-outline-variant rounded-lg flex flex-col items-center justify-center text-on-surface-variant hover:bg-surface-container-high hover:border-primary transition-all cursor-pointer gap-2 group">
+<span class="material-symbols-outlined text-3xl group-hover:scale-110 transition-transform">add_circle</span>
+<span class="text-[10px] font-medium">Add Clip</span>
+</div>
+</div>
+</div>
+<!-- Export Actions -->
+<div class="p-4 bg-surface border-t border-outline-variant flex flex-col gap-3 shadow-[0_-4px_12px_rgba(0,0,0,0.05)]">
+<div class="flex justify-between text-xs mb-1">
+<span class="text-on-surface-variant">Selected: <span class="font-bold text-on-surface">1 item</span></span>
+<span class="text-on-surface-variant">Estimated: <span class="font-bold text-on-surface">124 MB</span></span>
+</div>
+<button class="w-full py-2 bg-primary-container text-on-primary-container font-bold rounded-lg hover:bg-primary transition-colors flex items-center justify-center gap-2">
+<span class="material-symbols-outlined text-sm">download</span>
+<span class="">Export Selected</span>
+</button>
+</div>
+</aside>
+</main>
+<!-- Footer Status Bar -->
+<footer class="bg-surface-container h-8 flex justify-between items-center px-4 border-t border-outline-variant z-50">
+<div class="flex items-center gap-6">
+<div class="flex items-center gap-2">
+<div class="w-2 h-2 rounded-full bg-[#4CAF50]"></div>
+<span class="font-status-bar text-status-bar text-on-surface-variant">System Ready</span>
+</div>
+<span class="font-status-bar text-status-bar text-on-surface-variant">Project: <span class="font-medium text-on-surface">Untitled Presentation</span></span>
+<span class="font-status-bar text-status-bar text-on-surface-variant">Resolution: <span class="font-medium text-on-surface">1080x1920</span></span>
+<span class="font-status-bar text-status-bar text-on-surface-variant">FPS: <span class="font-medium text-on-surface">30</span></span>
+</div>
+<div class="flex items-center gap-4">
+<span class="font-status-bar text-status-bar text-on-surface-variant">75%</span>
+<div class="flex items-center gap-2 w-32 group">
+<span class="material-symbols-outlined text-xs text-on-surface-variant group-hover:text-on-surface cursor-pointer">remove</span>
+<div class="flex-1 h-1 bg-surface-container-highest rounded-full overflow-hidden">
+<div class="bg-outline h-full w-3/4"></div>
+</div>
+<span class="material-symbols-outlined text-xs text-on-surface-variant group-hover:text-on-surface cursor-pointer">add</span>
+</div>
+<div class="h-4 w-px bg-outline-variant"></div>
+<span class="material-symbols-outlined text-on-surface-variant hover:text-primary cursor-pointer text-sm">fit_screen</span>
+</div>
+</footer>
+<script>
+        // Simple micro-interaction for the playhead
+        const timeline = document.querySelector('.timeline-track-bg');
+        const playhead = document.querySelector('.z-20'); // Playhead selector
+
+        if (timeline && playhead) {
+            timeline.addEventListener('mousemove', (e) => {
+                if (e.buttons === 1) { // Left click dragging
+                    const rect = timeline.getBoundingClientRect();
+                    const x = e.clientX - rect.left;
+                    if (x >= 0 && x <= rect.width) {
+                        playhead.style.left = `${x}px`;
+                    }
+                }
+            });
+
+            timeline.addEventListener('mousedown', (e) => {
+                const rect = timeline.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                if (x >= 0 && x <= rect.width) {
+                    playhead.style.left = `${x}px`;
+                }
+            });
+        }
+
+        // Ribbon button active state simulation
+        const ribbonButtons = document.querySelectorAll('nav button');
+        ribbonButtons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                ribbonButtons.forEach(b => {
+                    b.classList.remove('text-primary', 'border-b-2', 'border-primary', 'font-bold');
+                    b.classList.add('text-on-surface-variant');
+                });
+                btn.classList.add('text-primary', 'border-b-2', 'border-primary', 'font-bold');
+                btn.classList.remove('text-on-surface-variant');
+            });
+        });
+    </script>
+
+</body></html>
