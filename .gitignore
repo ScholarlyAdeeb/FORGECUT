@@ -1,0 +1,8 @@
+node_modules/
+stitch_backup/
+*.zip
+temp_output*.txt
+.next/
+out/
+.env
+.env.local
