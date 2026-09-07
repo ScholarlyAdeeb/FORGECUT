@@ -319,7 +319,12 @@ function initEventListeners() {
         if (!clip) return;
 
         if (timelineContainer) {
-            const rect = timelineContainer.getBoundingClientRect();
+            // Cached per gesture: reading it every mousemove forced a layout
+            // flush on each event.
+            if (!activeDrag._containerRect) {
+                activeDrag._containerRect = timelineContainer.getBoundingClientRect();
+            }
+            const rect = activeDrag._containerRect;
             const mouseX = e.clientX;
             const threshold = 60;
             if (mouseX > rect.right - threshold) {
@@ -445,17 +450,22 @@ function initEventListeners() {
             clip.transitionDuration = targetDuration;
         }
 
-        renderTimeline();
-        syncMediaPlayback();
+        // Coalesced into one paint per frame. This used to rebuild the whole
+        // timeline and re-seek every media element on every mousemove.
+        scheduleRender({ timeline: true });
     });
 
     document.addEventListener('mouseup', () => {
         if (activeDrag) {
             saveStateToHistory(`Timeline Drag ${activeDrag.type}`);
+            // Media is re-synced once at gesture end rather than per pointer
+            // event; seeking elements mid-drag caused audible stutter and
+            // races on rapid movement.
+            syncMediaPlayback();
         }
         activeDrag = null;
         state.isSnapping = false;
-        renderTimeline();
+        scheduleRender({ timeline: true, inspector: true });
     });
 
     // Canvas Move/Scale/Rotate Transform controls
@@ -625,7 +635,9 @@ function initEventListeners() {
         const clip = findClipById(activeCanvasDrag.clipId);
         if (!clip) return;
 
-        const rect = canvas.getBoundingClientRect();
+        // Cached per gesture — see the timeline drag above.
+        if (!activeCanvasDrag._rect) activeCanvasDrag._rect = canvas.getBoundingClientRect();
+        const rect = activeCanvasDrag._rect;
         const deltaX = (e.clientX - activeCanvasDrag.startX) * (canvas.width / rect.width);
         const deltaY = (e.clientY - activeCanvasDrag.startY) * (canvas.height / rect.height);
 
@@ -655,7 +667,7 @@ function initEventListeners() {
                     }
                 }
             });
-            updateInspector();
+            scheduleRender({ inspector: true });
         } else if (activeCanvasDrag.type === 'scale-corner') {
             if (!e.shiftKey && track && track.type === 'shape') {
                 clip.shapeWidth = Math.max(20, activeCanvasDrag.startWidth + deltaX);
@@ -671,7 +683,7 @@ function initEventListeners() {
                     clip.scale = Math.max(0.1, activeCanvasDrag.startScale * scaleMultiplier);
                 }
             }
-            updateInspector();
+            scheduleRender({ inspector: true });
         } else if (activeCanvasDrag.type === 'scale-edge') {
             if (track && track.type === 'shape') {
                 if (activeCanvasDrag.edge === 'left' || activeCanvasDrag.edge === 'right') {
@@ -689,21 +701,21 @@ function initEventListeners() {
                     clip.scale = Math.max(0.1, activeCanvasDrag.startScale * scaleMultiplier);
                 }
             }
-            updateInspector();
+            scheduleRender({ inspector: true });
         } else if (activeCanvasDrag.type === 'rotate') {
             const mouseX = (e.clientX - rect.left) * (canvas.width / rect.width);
             const mouseY = (e.clientY - rect.top) * (canvas.height / rect.height);
             const angleRad = Math.atan2(mouseY - activeCanvasDrag.cy, mouseX - activeCanvasDrag.cx);
             const angleDeg = (angleRad * 180 / Math.PI) + 90;
             clip.rotation = Math.round(angleDeg % 360);
-            updateInspector();
+            scheduleRender({ inspector: true });
         }
     });
 
     document.addEventListener('mouseup', () => {
         activeCanvasDrag = null;
         window._activeGuides = [];
-        renderCanvasComposition();
+        scheduleRender();
     });
 
     // Keydown Split shortcut

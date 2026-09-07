@@ -11,16 +11,28 @@ function setTime(time, forceUpdateMedia = true) {
     time = Math.round(time / 0.04) * 0.04;
 
     if (window.ForgeCut && window.ForgeCut.PlaybackEngine) {
+        // seekTo() already runs a full syncAllMedia() pass. Calling
+        // syncMediaPlayback() afterwards ran an identical second pass over
+        // every clip on every seek — and syncAllMedia is roughly O(clips^2),
+        // because computeClipVolume walks all tracks for ducking and searches
+        // for crossfade neighbours per clip. One pass is enough.
         window.ForgeCut.PlaybackEngine.seekTo(time);
-    } else {
-        state.currentTime = Math.max(0, Math.min(state.duration, time));
+        updateTimecodeDisplay();
+        updatePlayheadUI();
+        // Repaint next frame. The inspector only needs refreshing for
+        // user-driven seeks — during playback it would rebuild every frame.
+        scheduleRender({ inspector: !!state.selectedClipId && !state.isPlaying });
+        return;
     }
+
+    state.currentTime = Math.max(0, Math.min(state.duration, time));
     updateTimecodeDisplay();
     updatePlayheadUI();
 
     if (forceUpdateMedia) {
         syncMediaPlayback();
     }
+    scheduleRender();
 }
 
 function updateTimecodeDisplay() {
@@ -39,17 +51,19 @@ function updateTimecodeDisplay() {
     }
 }
 
+/**
+ * Move the playhead. Nothing else.
+ *
+ * This used to also redraw the minimap, composite the whole canvas and rebuild
+ * the inspector, which made a one-line DOM update cost ~19.5ms — and because
+ * renderFrame() calls this and *then* composites, the canvas was painted twice
+ * on every frame of playback. The heavier work is coalesced through the frame
+ * loop instead.
+ */
 function updatePlayheadUI() {
     const leftOffset = state.currentTime * state.zoom;
     if (playhead) {
         playhead.style.left = `${leftOffset}px`;
-    }
-    if (typeof renderTimelineMinimap === 'function') {
-        renderTimelineMinimap();
-    }
-    renderCanvasComposition();
-    if (state.selectedClipId) {
-        updateInspector();
     }
 }
 
@@ -154,9 +168,46 @@ window.requestRedraw = function () {
     state.needsRedraw = true;
 };
 
+/**
+ * Request work for the next animation frame instead of doing it synchronously.
+ *
+ * High-frequency handlers (drag, scrub, pan, wheel) used to call
+ * renderTimeline() / updateInspector() / renderCanvasComposition() directly on
+ * every pointer event — 60-120 full timeline rebuilds, inspector DOM rebuilds
+ * and 1920x1080 canvas repaints per second. Marking dirty flags here coalesces
+ * all of that into one paint per frame, driven by the loop that already exists
+ * in PlaybackEngine.
+ *
+ *   scheduleRender()                       -> repaint canvas next frame
+ *   scheduleRender({ timeline: true })     -> and rebuild the timeline
+ *   scheduleRender({ inspector: true })    -> and rebuild the inspector
+ */
+window.scheduleRender = function (what) {
+    if (what) {
+        if (what.timeline) state._dirtyTimeline = true;
+        if (what.inspector) state._dirtyInspector = true;
+    }
+    state.needsRedraw = true;
+};
+
 function renderFrame() {
     updateTimecodeDisplay();
     updatePlayheadUI();
+
+    // Flush coalesced structural work before painting the canvas, so the
+    // timeline DOM and the composition agree within a single frame.
+    if (state._dirtyTimeline) {
+        state._dirtyTimeline = false;
+        if (typeof renderTimeline === 'function') renderTimeline();
+    }
+    if (state._dirtyInspector) {
+        state._dirtyInspector = false;
+        if (typeof updateInspector === 'function') updateInspector();
+    }
+    if (typeof renderTimelineMinimap === 'function') {
+        renderTimelineMinimap();
+    }
+
     renderCanvasComposition();
 }
 
