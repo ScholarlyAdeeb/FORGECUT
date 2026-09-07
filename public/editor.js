@@ -52,10 +52,11 @@ function runEditorInit() {
     setupCanvas();
     if (typeof renderTimeline === 'function') renderTimeline();
     if (typeof renderCanvasComposition === 'function') renderCanvasComposition();
-    // Start playback animation loop if PlaybackEngine loaded
-    if (window.ForgeCut && window.ForgeCut.PlaybackEngine && typeof window.ForgeCut.PlaybackEngine.start === 'function') {
-        window.ForgeCut.PlaybackEngine.start(state, renderCanvasComposition);
+    // Start the single render loop that drives playback and repaints.
+    if (!window.ForgeCut || !window.ForgeCut.PlaybackEngine) {
+        throw new Error('ForgeCut: PlaybackEngine failed to load — playback and rendering are unavailable.');
     }
+    window.ForgeCut.PlaybackEngine.start(state, renderFrame);
     window.selectRow = selectRow;
 }
 
@@ -67,24 +68,19 @@ window.addEventListener('DOMContentLoaded', () => {
     if (typeof setupBackstageNavigation === 'function') setupBackstageNavigation();
     if (typeof setupFileInputListeners === 'function') setupFileInputListeners();
 
-    // Canvas and visual setup deferred until editor shell is mounted
-    const waitForCanvas = setInterval(() => {
-        const shell = document.getElementById('fc-editor-shell');
-        const c = document.getElementById('renderCanvas');
-        if (c && shell && shell.style.display !== 'none') {
-            clearInterval(waitForCanvas);
-            runEditorInit();
-        }
-    }, 100);
-
-    // Fallback: if welcome is bypassed and editor shell was pre-shown
-    setTimeout(() => {
-        const c = document.getElementById('renderCanvas');
-        if (c && !_editorInitialized) {
-            runEditorInit();
-        }
-    }, 4000);
+    // If the shell is already visible (welcome screen bypassed) initialise now.
+    // Otherwise ui.js calls ForgeCut.initEditor() the moment it reveals the
+    // shell. This used to be a 100ms poll plus a blind 4s timeout, which could
+    // initialise the editor while the welcome screen was still up.
+    const shell = document.getElementById('fc-editor-shell');
+    if (shell && getComputedStyle(shell).display !== 'none') {
+        runEditorInit();
+    }
 });
+
+// Called by ui.js#launchEditor once the editor shell is on screen.
+window.ForgeCut = window.ForgeCut || {};
+window.ForgeCut.initEditor = runEditorInit;
 
 function initDOMElements() {
     canvas = document.getElementById('renderCanvas');
@@ -314,45 +310,19 @@ function syncMediaPlayback() {
     }
 }
 
-// Optimized RequestAnimationFrame loop for high-performance canvas composite
-let lastTime = 0;
+// The render loop itself lives in PlaybackEngine.start(); this is the frame
+// callback it drives. Marking state.needsRedraw (via requestRedraw) is what
+// schedules a repaint, so edits coalesce into one paint per frame instead of
+// repainting synchronously on every mutation.
 state.needsRedraw = true; // initially true to draw first frame
 window.requestRedraw = function () {
     state.needsRedraw = true;
 };
 
-function animationLoop(timestamp) {
-    requestAnimationFrame(animationLoop);
-
-    // Pause rendering when tab is inactive to save battery and performance
-    if (document.hidden) return;
-
-    if (!lastTime) lastTime = timestamp;
-    const delta = (timestamp - lastTime) / 1000;
-    lastTime = timestamp;
-
-    let played = false;
-    if (state.isPlaying) {
-        played = true;
-        if (window.ForgeCut && window.ForgeCut.PlaybackEngine) {
-            window.ForgeCut.PlaybackEngine.bindState(state);
-            window.ForgeCut.PlaybackEngine.advanceTime(delta);
-        } else {
-            let newTime = state.currentTime + delta;
-            if (newTime >= state.duration) {
-                newTime = state.duration;
-                pause();
-            }
-            setTime(newTime, false);
-        }
-    }
-
-    if (played || state.needsRedraw) {
-        state.needsRedraw = false;
-        updateTimecodeDisplay();
-        updatePlayheadUI();
-        renderCanvasComposition();
-    }
+function renderFrame() {
+    updateTimecodeDisplay();
+    updatePlayheadUI();
+    renderCanvasComposition();
 }
 
 // Render active clips onto the canvas
@@ -1303,8 +1273,8 @@ if (!window.closeBackstage) window.closeBackstage = function () {
 };
 
 // Undo / Redo mock hooks
-window.triggerUndo = function () { alert('Undo action completed'); };
-window.triggerRedo = function () { alert('Redo action completed'); };
+window.triggerUndo = function () { fcToast('Undo action completed'); };
+window.triggerRedo = function () { fcToast('Redo action completed'); };
 
 // Native App Commands simulations
 window.openProjectSettings = function () {
@@ -1312,9 +1282,9 @@ window.openProjectSettings = function () {
     const btn = document.querySelector('[data-backstage-tab="settings"]');
     if (btn) btn.click();
 };
-window.minimizeApp = function () { alert('Application minimized'); };
-window.maximizeApp = function () { alert('Application maximized'); };
-window.closeApp = function () { alert('Application closed'); };
+window.minimizeApp = function () { fcToast('Application minimized'); };
+window.maximizeApp = function () { fcToast('Application maximized'); };
+window.closeApp = function () { fcToast('Application closed'); };
 
 // Timeline zoom adjust
 window.adjustZoom = function (amount) {
@@ -1513,7 +1483,7 @@ function initEventListeners() {
                 addNewTextClipWithPlaceholder(val);
                 labelTextMask.value = '';
             } else {
-                alert('Please enter a label name!');
+                fcToast('Please enter a label name!');
             }
         });
     }
@@ -1536,15 +1506,15 @@ function initEventListeners() {
                             renderTimeline();
                             updateInspector();
                         } else {
-                            alert('Please select a text clip to link!');
+                            fcToast('Please select a text clip to link!');
                         }
                     }
                 } else {
-                    alert('Please select a text clip to link!');
+                    fcToast('Please select a text clip to link!');
                 }
                 labelTextMask.value = '';
             } else {
-                alert('Please enter a label name!');
+                fcToast('Please enter a label name!');
             }
         });
     }
@@ -2382,7 +2352,7 @@ function updateInspector() {
         textHtml = `
             <div class="control-group">
                 <label>Text Value</label>
-                <input type="text" id="insp_text" value="${clip.text || ''}">
+                <input type="text" id="insp_text" value="${esc(clip.text || '')}">
             </div>
             <div class="control-group">
                 <label>Font Family</label>
@@ -3158,8 +3128,8 @@ window.handleAssetUpload = handleAssetUpload;
             item.innerHTML = `
             ${previewHtml}
             <div class="flex justify-between items-center w-full">
-                <span class="text-[10px] font-bold text-on-surface truncate w-32" title="${asset.name}">${asset.name}</span>
-                <button class="text-xs text-on-surface-variant hover:text-error bg-transparent border-none cursor-pointer p-0" onclick="removeUploadedAsset('${asset.id}', '${type}')">
+                <span class="text-[10px] font-bold text-on-surface truncate w-32" title="${esc(asset.name)}">${esc(asset.name)}</span>
+                <button class="text-xs text-on-surface-variant hover:text-error bg-transparent border-none cursor-pointer p-0" onclick="removeUploadedAsset('${esc(asset.id)}', '${esc(type)}')">
                     <span class="material-symbols-outlined text-sm">delete</span>
                 </button>
             </div>
@@ -3193,7 +3163,7 @@ window.handleAssetUpload = handleAssetUpload;
             <div class="flex items-center gap-3">
                 <span class="material-symbols-outlined text-primary">audiotrack</span>
                 <div class="flex flex-col">
-                    <span class="text-xs font-bold text-on-surface truncate w-36" title="${asset.name}">${asset.name}</span>
+                    <span class="text-xs font-bold text-on-surface truncate w-36" title="${esc(asset.name)}">${esc(asset.name)}</span>
                     <span class="text-[9px] text-outline">Audio Track Asset</span>
                 </div>
             </div>
@@ -3213,7 +3183,16 @@ window.handleAssetUpload = handleAssetUpload;
             track.clips = track.clips.filter(c => c.assetId !== assetId);
         });
 
-        URL.revokeObjectURL(asset.objectUrl);
+        // Route removal through MediaEngine so its own library drops the asset
+        // too. assetCache is a second index over the *same* asset objects, so
+        // revoking here without telling MediaEngine left it holding an entry
+        // with a dead objectUrl and a live media element — a leak, and a source
+        // of stale reads via PlaybackEngine's ME.getAsset() lookup.
+        if (window.ForgeCut && window.ForgeCut.MediaEngine) {
+            window.ForgeCut.MediaEngine.removeAsset(assetId);
+        } else if (asset.objectUrl) {
+            URL.revokeObjectURL(asset.objectUrl);
+        }
         assetCache.delete(assetId);
 
         const grid = document.getElementById('catalog-media-grid');
@@ -3261,7 +3240,20 @@ window.handleAssetUpload = handleAssetUpload;
             const tag = document.createElement('span');
             tag.className = 'label-tag';
             tag.style.cursor = 'pointer';
-            tag.innerHTML = `<span onclick="handleLabelTagClick('${ph}')">{{${ph}}}</span><button onclick="removePlaceholder(event, '${ph}')">&times;</button>`;
+            // Built as DOM nodes rather than an interpolated inline handler:
+            // placeholder names come from CSV column headers, and a header
+            // containing a quote used to break out of the onclick attribute and
+            // run as script.
+            const label = document.createElement('span');
+            label.textContent = `{{${ph}}}`;
+            label.addEventListener('click', () => window.handleLabelTagClick(ph));
+
+            const removeBtn = document.createElement('button');
+            removeBtn.innerHTML = '&times;';
+            removeBtn.addEventListener('click', (event) => window.removePlaceholder(event, ph));
+
+            tag.appendChild(label);
+            tag.appendChild(removeBtn);
             container.appendChild(tag);
         });
     }
@@ -3336,10 +3328,18 @@ window.handleAssetUpload = handleAssetUpload;
             const val2 = keys[1] ? row[keys[1]] || '' : '';
             const displayText = val2 ? `${val1} (${val2})` : val1;
 
-            item.innerHTML = `
-            <span class="row-text-val">${displayText || `Row ${idx + 1}`}</span>
-            <span class="badge-id">#${idx + 1}</span>
-        `;
+            // textContent, not innerHTML: these values come straight from the
+            // user's CSV and must never be parsed as markup.
+            const valueEl = document.createElement('span');
+            valueEl.className = 'row-text-val';
+            valueEl.textContent = displayText || `Row ${idx + 1}`;
+
+            const badgeEl = document.createElement('span');
+            badgeEl.className = 'badge-id';
+            badgeEl.textContent = `#${idx + 1}`;
+
+            item.appendChild(valueEl);
+            item.appendChild(badgeEl);
             rowSelectorList.appendChild(item);
         });
 
@@ -3456,7 +3456,7 @@ window.handleAssetUpload = handleAssetUpload;
                 </div>
             </div>
             <div class="batch-card-info">
-                <span class="batch-card-title" title="${titleText}">${titleText}</span>
+                <span class="batch-card-title" title="${esc(titleText)}">${esc(titleText)}</span>
                 ${subtitleVal ? `<span class="batch-card-tag">${subtitleVal}</span>` : ''}
             </div>
         `;
@@ -3538,7 +3538,7 @@ window.handleAssetUpload = handleAssetUpload;
 
     window.startBulkExport = async function () {
         if (state.csvData.length === 0) {
-            alert('Please upload a populated CSV file first!');
+            fcToast('Please upload a populated CSV file first!');
             return;
         }
         pause();
@@ -3568,15 +3568,15 @@ window.handleAssetUpload = handleAssetUpload;
     };
 
     window.openProject = function () {
-        alert('Opening local project templates...');
+        fcToast('Opening local project templates...');
     };
 
     window.saveProject = function () {
-        alert('Project saved successfully!');
+        fcToast('Project saved successfully!');
     };
 
     window.saveProjectAs = function () {
-        alert('Project template duplicated!');
+        fcToast('Project template duplicated!');
     };
 
     window.addNewTrack = function (type) {
@@ -3736,7 +3736,7 @@ window.handleAssetUpload = handleAssetUpload;
             item.innerHTML = `
             <div style="display:flex; align-items:center; gap:0.5rem; flex:1;">
                 <input type="checkbox" class="queue-item-checkbox" ${state.batchSelection[idx] ? 'checked' : ''} onchange="toggleQueueSelection(${idx}, this.checked)">
-                <span style="font-size:0.75rem; cursor:pointer;" onclick="selectRow(${idx})">${idx + 1} - ${nameVal}</span>
+                <span style="font-size:0.75rem; cursor:pointer;" onclick="selectRow(${idx})">${idx + 1} - ${esc(nameVal)}</span>
             </div>
             <div style="display:flex; gap:0.25rem;">
                 <button onclick="selectRow(${idx})" style="padding:0.1rem 0.3rem; font-size:0.7rem; cursor:pointer; background:none; border:none; color:inherit;">👁️</button>
@@ -3804,7 +3804,7 @@ window.handleAssetUpload = handleAssetUpload;
 
     window.timelineCopy = function () {
         if (!state.selectedClipId) {
-            alert('Please select a clip to copy.');
+            fcToast('Please select a clip to copy.');
             return;
         }
         let selectedClip = null;
@@ -3820,7 +3820,7 @@ window.handleAssetUpload = handleAssetUpload;
 
     window.timelineCut = function () {
         if (!state.selectedClipId) {
-            alert('Please select a clip to cut.');
+            fcToast('Please select a clip to cut.');
             return;
         }
         saveStateToHistory();
@@ -3830,7 +3830,7 @@ window.handleAssetUpload = handleAssetUpload;
 
     window.timelinePaste = function () {
         if (!clipboardClip) {
-            alert('Clipboard is empty. Copy a clip first.');
+            fcToast('Clipboard is empty. Copy a clip first.');
             return;
         }
         saveStateToHistory();
@@ -3862,7 +3862,7 @@ window.handleAssetUpload = handleAssetUpload;
 
     window.timelineDuplicate = function () {
         if (!state.selectedClipId) {
-            alert('Please select a clip to duplicate.');
+            fcToast('Please select a clip to duplicate.');
             return;
         }
         saveStateToHistory();
@@ -3893,17 +3893,17 @@ window.handleAssetUpload = handleAssetUpload;
             saveStateToHistory();
             splitClipAtPlayhead(state.selectedClipId);
         } else {
-            alert('Please select a clip to split.');
+            fcToast('Please select a clip to split.');
         }
     };
 
     window.triggerTrim = function () {
-        alert('Trim tool active. You can drag the left or right edges of any clip on the timeline to trim its duration.');
+        fcToast('Trim tool active. You can drag the left or right edges of any clip on the timeline to trim its duration.');
     };
 
     window.timelineRippleDelete = function () {
         if (!state.selectedClipId) {
-            alert('Please select a clip to ripple delete.');
+            fcToast('Please select a clip to ripple delete.');
             return;
         }
         saveStateToHistory();
@@ -3935,7 +3935,7 @@ window.handleAssetUpload = handleAssetUpload;
         }
     };
 
-    window.timelineDeleteSelected = function () {
+    window.timelineDeleteSelected = async function () {
         if (state.selectedClipId) {
             saveStateToHistory();
 
@@ -3953,7 +3953,7 @@ window.handleAssetUpload = handleAssetUpload;
                         if (track.clips.includes(clipToDelete)) trackType = track.type;
                     });
                     if (trackType === 'video') {
-                        deleteLinked = confirm("Do you also want to delete the linked audio clip?");
+                        deleteLinked = await fcConfirm("Do you also want to delete the linked audio clip?", { okLabel: 'Delete both', cancelLabel: 'Keep audio' });
                     }
                 }
 
@@ -3972,7 +3972,7 @@ window.handleAssetUpload = handleAssetUpload;
             renderCanvasComposition();
             syncMediaPlayback();
         } else {
-            alert('Please select a clip to delete.');
+            fcToast('Please select a clip to delete.');
         }
     };
 
@@ -3987,7 +3987,7 @@ window.handleAssetUpload = handleAssetUpload;
 
     window.rippleDeleteSelected = function () {
         if (!state.selectedClipId) {
-            alert('Please select a clip to delete.');
+            fcToast('Please select a clip to delete.');
             return;
         }
         const clip = findClipById(state.selectedClipId);
@@ -4093,7 +4093,7 @@ window.handleAssetUpload = handleAssetUpload;
         if (!clip) return;
         const playheadLocal = state.currentTime - clip.startTime;
         if (playheadLocal < 0 || playheadLocal > clip.duration) {
-            alert('Playhead is outside the selected clip.');
+            fcToast('Playhead is outside the selected clip.');
             return;
         }
         if (!clip.gainAutomation) clip.gainAutomation = [];
@@ -4139,7 +4139,7 @@ window.handleAssetUpload = handleAssetUpload;
         if (!clip) return;
         const playheadLocal = state.currentTime - clip.startTime;
         if (playheadLocal < 0 || playheadLocal > clip.duration) {
-            alert('Playhead is outside the selected clip.');
+            fcToast('Playhead is outside the selected clip.');
             return;
         }
         if (!clip.censorBeeps) clip.censorBeeps = [];
@@ -4291,10 +4291,10 @@ window.handleAssetUpload = handleAssetUpload;
 
             updateInspector();
             renderCanvasComposition();
-            alert(`Font '${fontName}' imported and registered successfully!`);
+            fcToast(`Font '${fontName}' imported and registered successfully!`);
         } catch (e) {
             console.error('[FontManager] Font import failed:', e);
-            alert('Failed to load custom font file. Please ensure it is a valid .ttf or .otf file.');
+            fcToast('Failed to load custom font file. Please ensure it is a valid .ttf or .otf file.');
         }
     };
 
@@ -4352,7 +4352,7 @@ window.handleAssetUpload = handleAssetUpload;
     // Transitions & Animations Settings
     window.setTransition = function (type) {
         if (!state.selectedClipId) {
-            alert('Please select a clip to apply the transition.');
+            fcToast('Please select a clip to apply the transition.');
             return;
         }
         saveStateToHistory();
@@ -4387,7 +4387,7 @@ window.handleAssetUpload = handleAssetUpload;
 
     window.setAnimation = function (phase, type) {
         if (!state.selectedClipId) {
-            alert('Please select a clip to apply the animation.');
+            fcToast('Please select a clip to apply the animation.');
             return;
         }
         saveStateToHistory();
@@ -4401,20 +4401,29 @@ window.handleAssetUpload = handleAssetUpload;
             }
         });
         if (applied) {
-            alert(`${phase} animation set to: ${type}`);
+            fcToast(`${phase} animation set to: ${type}`);
             updateInspector();
         }
     };
 
     // Production-Grade Lifecycle & State Purging
-    window.triggerNewProject = function (ratio) {
-        if (!confirm('Are you sure you want to start a new project? All unsaved tracks and cached assets will be purged.')) return;
+    window.triggerNewProject = async function (ratio) {
+        if (!(await fcConfirm('Start a new project? All unsaved tracks and cached assets will be purged.', { okLabel: 'Discard and start new', danger: true }))) return;
 
-        // Purge cached files and references
-        assetCache.forEach(asset => {
-            if (asset.objectUrl) URL.revokeObjectURL(asset.objectUrl);
-        });
+        // Purge cached files and references. MediaEngine owns the object URLs
+        // and media elements; clearing only assetCache used to strand its
+        // library for the rest of the session.
+        if (window.ForgeCut && window.ForgeCut.MediaEngine) {
+            window.ForgeCut.MediaEngine.clearAll();
+        } else {
+            assetCache.forEach(asset => {
+                if (asset.objectUrl) URL.revokeObjectURL(asset.objectUrl);
+            });
+        }
         assetCache.clear();
+        if (window.ForgeCut && window.ForgeCut.PlaybackEngine) {
+            window.ForgeCut.PlaybackEngine.clearPool();
+        }
 
         // Reset state vectors
         state.duration = 30;
@@ -4465,7 +4474,7 @@ window.handleAssetUpload = handleAssetUpload;
         const nameEl = document.getElementById('footerProjectName');
         if (nameEl) nameEl.textContent = 'Untitled Project';
         setTimeout(() => { window._isResettingProject = false; }, 500);
-        alert('Clean project workspace initialized.');
+        fcToast('Clean project workspace initialized.');
     };
 
     window.saveProject = function () {
@@ -4492,7 +4501,7 @@ window.handleAssetUpload = handleAssetUpload;
         a.download = `ForgeCut_Project_${Date.now()}.json`;
         a.click();
         URL.revokeObjectURL(url);
-        alert('Project saved successfully.');
+        fcToast('Project saved successfully.');
     };
 
     window.saveProjectAs = window.saveProject;
@@ -4513,25 +4522,25 @@ window.handleAssetUpload = handleAssetUpload;
                     updateInspector();
                     renderCanvasComposition();
                     closeBackstage();
-                    alert('Project configuration loaded successfully.');
+                    fcToast('Project configuration loaded successfully.');
                 }
             } catch (err) {
-                alert('Failed to parse project file.');
+                fcToast('Failed to parse project file.');
             }
         };
         reader.readAsText(file);
     };
 
     // Canvas Custom Design Background Types
-    window.changeBackgroundType = function (type) {
+    window.changeBackgroundType = async function (type) {
         state.bgType = type;
         if (type === 'solid') {
-            state.bgColor = prompt('Enter Solid Hex Color Code (e.g. #005faa):', state.bgColor || '#005faa') || '#005faa';
+            state.bgColor = (await fcPrompt('Enter Solid Hex Color Code (e.g. #005faa):', state.bgColor || '#005faa')) || '#005faa';
         } else if (type === 'gradient') {
-            state.bgGradientStart = prompt('Gradient Start Hex Color Code:', state.bgGradientStart || '#005faa') || '#005faa';
-            state.bgGradientEnd = prompt('Gradient End Hex Color Code:', state.bgGradientEnd || '#dee0e2') || '#dee0e2';
+            state.bgGradientStart = (await fcPrompt('Gradient Start Hex Color Code:', state.bgGradientStart || '#005faa')) || '#005faa';
+            state.bgGradientEnd = (await fcPrompt('Gradient End Hex Color Code:', state.bgGradientEnd || '#dee0e2')) || '#dee0e2';
         } else if (type === 'image') {
-            state.bgImageUrl = prompt('Enter Background Image URL:', state.bgImageUrl || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=1080') || '';
+            state.bgImageUrl = (await fcPrompt('Enter Background Image URL:', state.bgImageUrl || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=1080')) || '';
         }
         renderCanvasComposition();
     };
@@ -4546,18 +4555,18 @@ window.handleAssetUpload = handleAssetUpload;
             state.bgColor = '#020617';
         }
         renderCanvasComposition();
-        alert(`Applied theme preset: ${preset}`);
+        fcToast(`Applied theme preset: ${preset}`);
     };
 
     window.applyBrandKit = function () {
         state.bgType = 'solid';
         state.bgColor = '#005faa';
         renderCanvasComposition();
-        alert('Applied brand kit settings.');
+        fcToast('Applied brand kit settings.');
     };
 
     window.uploadBrandAsset = function (type) {
-        alert(`Import brand asset logic active for: ${type}`);
+        fcToast(`Import brand asset logic active for: ${type}`);
     };
 
     // Safe Guide platform overlays
@@ -4582,7 +4591,7 @@ window.handleAssetUpload = handleAssetUpload;
     // Transitions preview & controls
     window.playTransitionPreview = function () {
         if (!state.selectedClipId) {
-            alert('Please select a clip to preview its transition.');
+            fcToast('Please select a clip to preview its transition.');
             return;
         }
         const clip = findClipById(state.selectedClipId);
@@ -4601,10 +4610,10 @@ window.handleAssetUpload = handleAssetUpload;
             if (clip) {
                 const durationInput = document.getElementById('transitionDurationInput');
                 clip.transitionDuration = parseFloat(durationInput.value) || 1.5;
-                alert(`Applied transition settings to selected clip.`);
+                fcToast(`Applied transition settings to selected clip.`);
             }
         } else {
-            alert('Please select a clip first.');
+            fcToast('Please select a clip first.');
         }
     };
 
@@ -4616,7 +4625,7 @@ window.handleAssetUpload = handleAssetUpload;
                 clip.transitionDuration = dur;
             });
         });
-        alert('Applied transition settings to all clips in timeline.');
+        fcToast('Applied transition settings to all clips in timeline.');
     };
 
     window.applyTransitionSound = function (sound) {
@@ -4633,7 +4642,7 @@ window.handleAssetUpload = handleAssetUpload;
     window.toggleAnimationPane = function () {
         const rightPanel = document.querySelector('[data-right-tab="queue"]');
         if (rightPanel) rightPanel.click();
-        alert('Animation list panel active on Right Sidebar.');
+        fcToast('Animation list panel active on Right Sidebar.');
     };
 
     window.updateAnimationParameters = function () {
@@ -4706,7 +4715,7 @@ window.handleAssetUpload = handleAssetUpload;
         } else {
             document.documentElement.classList.remove('dark');
         }
-        alert(`Theme set to ${theme}`);
+        fcToast(`Theme set to ${theme}`);
     };
 
     window.toggleViewElement = function (element, visible) {
@@ -4737,25 +4746,25 @@ window.handleAssetUpload = handleAssetUpload;
 
     // Bulk Production & CSV dynamic configuration
     window.openColumnMapper = function () {
-        alert(`Column variable mapper is operational. Current dynamic placeholders: ${state.placeholders.join(', ')}`);
+        fcToast(`Column variable mapper is operational. Current dynamic placeholders: ${state.placeholders.join(', ')}`);
     };
 
     window.validateCsvMapping = function () {
         if (state.csvData.length === 0) {
-            alert('Please import a CSV configuration first.');
+            fcToast('Please import a CSV configuration first.');
             return;
         }
-        alert(`CSV mapping validation: Success! ${state.csvData.length} records parsed successfully.`);
+        fcToast(`CSV mapping validation: Success! ${state.csvData.length} records parsed successfully.`);
     };
 
     window.generateSampleVariation = function () {
         if (state.csvData.length === 0) {
-            alert('Please import a CSV configuration first.');
+            fcToast('Please import a CSV configuration first.');
             return;
         }
         state.selectedRowIndex = Math.floor(Math.random() * state.csvData.length);
         renderCanvasComposition();
-        alert(`Generated variation preview for Row Index: ${state.selectedRowIndex + 1}`);
+        fcToast(`Generated variation preview for Row Index: ${state.selectedRowIndex + 1}`);
     };
 
     window.openBatchGalleryOverlay = function () {
@@ -4794,8 +4803,8 @@ window.handleAssetUpload = handleAssetUpload;
                 <span class="absolute bottom-2 left-2 text-[10px] bg-black/60 text-white px-2 py-0.5 rounded font-bold">Variation #${idx + 1}</span>
             </div>
             <div class="flex flex-col gap-1">
-                <span class="text-xs font-bold text-on-surface truncate">${nameVal}</span>
-                <span class="text-[10px] text-outline truncate">${keys.map(k => `${k}: ${row[k]}`).join(' | ')}</span>
+                <span class="text-xs font-bold text-on-surface truncate">${esc(nameVal)}</span>
+                <span class="text-[10px] text-outline truncate">${esc(keys.map(k => `${k}: ${row[k]}`).join(' | '))}</span>
             </div>
         `;
             container.appendChild(item);
@@ -4843,7 +4852,7 @@ window.handleAssetUpload = handleAssetUpload;
             if (tab) tab.click();
         } else if (ctrl && e.key.toLowerCase() === 's') {
             e.preventDefault();
-            alert('Workspace saved to local browser sandbox storage.');
+            fcToast('Workspace saved to local browser sandbox storage.');
         } else if (ctrl && e.key.toLowerCase() === 'z') {
             e.preventDefault();
             window.triggerUndo();
@@ -4942,7 +4951,7 @@ window.handleAssetUpload = handleAssetUpload;
                         track.clips.push(newClip);
                         renderTimeline();
                         renderCanvasComposition();
-                        alert(`Added clip at position: ${startVal.toFixed(2)}s`);
+                        fcToast(`Added clip at position: ${startVal.toFixed(2)}s`);
                     }
                 }
             } catch (err) { }
@@ -5053,9 +5062,8 @@ window.handleAssetUpload = handleAssetUpload;
             // General
             if (isCtrl && e.key.toLowerCase() === 'n') {
                 e.preventDefault();
-                if (confirm('Create new project? Unsaved changes will be lost.')) {
-                    location.reload();
-                }
+                fcConfirm('Create new project? Unsaved changes will be lost.', { okLabel: 'Discard and reload', danger: true })
+                    .then(ok => { if (ok) location.reload(); });
             } else if (isCtrl && e.key.toLowerCase() === 'o') {
                 e.preventDefault();
                 const inp = document.createElement('input');
@@ -5073,7 +5081,7 @@ window.handleAssetUpload = handleAssetUpload;
                                 renderCanvasComposition();
                                 syncMediaPlayback();
                             } catch (err) {
-                                alert('Failed to load project.');
+                                fcToast('Failed to load project.');
                             }
                         };
                         reader.readAsText(file);
@@ -5332,10 +5340,10 @@ window.handleAssetUpload = handleAssetUpload;
         });
     };
 
-    window.renameTrack = function (trackId) {
+    window.renameTrack = async function (trackId) {
         const track = state.tracks.find(t => t.id === trackId);
         if (!track) return;
-        const newName = prompt(`Enter new name for track "${track.name}":`, track.name);
+        const newName = await fcPrompt(`Enter new name for track "${track.name}":`, track.name);
         if (newName && newName.trim() !== '') {
             track.name = newName.trim();
             const labelEl = document.getElementById(`track-label-${trackId}`);
@@ -5376,7 +5384,7 @@ window.handleAssetUpload = handleAssetUpload;
                             clip.keyframes.push({ time: relativeTime, value: 1.0 });
                             renderTimeline();
                         } else {
-                            alert('Playhead must be inside the clip to add a keyframe.');
+                            fcToast('Playhead must be inside the clip to add a keyframe.');
                         }
                     }
                 }
@@ -5419,7 +5427,7 @@ window.handleAssetUpload = handleAssetUpload;
     window.groupSelectedClips = function () {
         const ids = state.selectedClipIds || [];
         if (ids.length < 2) {
-            alert('Please select at least 2 clips to group.');
+            fcToast('Please select at least 2 clips to group.');
             return;
         }
         const groupId = `group_${Date.now()}`;
@@ -5524,10 +5532,11 @@ window.handleAssetUpload = handleAssetUpload;
         }, 15000);
 
         // Autosave Restore Check
-        setTimeout(() => {
+        setTimeout(async () => {
             const saved = localStorage.getItem('forgecut_autosave');
             if (saved) {
-                if (confirm('An autosaved project was found. Would you like to restore it?')) {
+                const restore = await fcConfirm('An autosaved project was found. Restore it?', { okLabel: 'Restore', cancelLabel: 'Discard' });
+                if (restore) {
                     try {
                         const data = JSON.parse(saved);
                         state.tracks = data.tracks || [];
@@ -5542,7 +5551,7 @@ window.handleAssetUpload = handleAssetUpload;
                         renderTimeline();
                         updateInspector();
                         renderCanvasComposition();
-                        alert('Autosave restored successfully.');
+                        fcToast('Autosave restored successfully.');
                     } catch (e) {
                         console.error('Failed to parse autosave');
                     }
@@ -5575,8 +5584,8 @@ window.handleAssetUpload = handleAssetUpload;
         // Double-click to rename track headers
         setTimeout(() => {
             document.querySelectorAll('.w-48 span.text-xs').forEach(span => {
-                span.addEventListener('dblclick', () => {
-                    const newName = prompt('Enter new track name:', span.textContent);
+                span.addEventListener('dblclick', async () => {
+                    const newName = await fcPrompt('Enter new track name:', span.textContent);
                     if (newName && newName.trim()) {
                         span.textContent = newName.trim();
                     }

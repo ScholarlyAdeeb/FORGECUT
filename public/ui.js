@@ -80,6 +80,12 @@ window.launchEditor = function(ratio) {
         if (editorShell) {
             editorShell.style.display = 'flex';
 
+            // Canvas setup is deferred until the shell is on screen, so tell the
+            // editor to initialise now rather than leaving it to poll for us.
+            if (window.ForgeCut && typeof window.ForgeCut.initEditor === 'function') {
+                window.ForgeCut.initEditor();
+            }
+
             // Trigger keyframe entry animation
             requestAnimationFrame(() => {
                 editorShell.classList.add('editor-entering');
@@ -131,7 +137,7 @@ window.welcomeOpenProject = function(event) {
                 addRecentProject(file.name, data);
             }
         } catch (e) {
-            alert('Failed to parse project file.');
+            fcToast('Failed to parse project file.');
         }
     };
     reader.readAsText(file);
@@ -755,7 +761,7 @@ function submitBugReport(event) {
     const screenshot = document.getElementById('bugScreenshot').files[0];
     
     // Standard visual feedback notification / alert
-    alert(`Bug Report Submitted Successfully!\nTitle: ${title}\nDescription: ${description.substring(0, 50)}...\nScreenshot: ${screenshot ? screenshot.name : 'None'}`);
+    fcToast(`Bug Report Submitted Successfully!\nTitle: ${title}\nDescription: ${description.substring(0, 50)}...\nScreenshot: ${screenshot ? screenshot.name : 'None'}`);
     closeHelpDialog();
 }
 

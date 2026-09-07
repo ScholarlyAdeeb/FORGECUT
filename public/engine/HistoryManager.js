@@ -5,7 +5,10 @@
 (function() {
     'use strict';
 
-    const MAX_STACK_SIZE = Infinity;
+    // Each entry is a deep clone of the whole track state, so this stack is the
+    // largest thing the editor holds in memory. Infinity meant it grew for the
+    // entire session and the trim below could never run.
+    const MAX_STACK_SIZE = 100;
     let _undoStack = [];
     let _redoStack = [];
     let _stateRef = null;
