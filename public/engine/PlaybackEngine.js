@@ -250,7 +250,11 @@
                                     vol *= (remaining / clip.fadeOut);
                                 }
                             }
-                            element.volume = Math.max(0, Math.min(1, vol));
+                            // Preview audio plays through HTMLMediaElement volume,
+                            // which bypasses AudioEngine's master gain node, so the
+                            // master slider had no effect on playback. Apply it here.
+                            const master = AE ? AE.getMasterVolume() : 1;
+                            element.volume = Math.max(0, Math.min(1, vol * master));
                         }
 
                         // Check if current playhead hits a censor beep for real-time oscillator trigger

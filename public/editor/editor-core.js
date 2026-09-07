@@ -32,6 +32,15 @@ const state = {
     canvasPanY: 0
 };
 
+// `state` is declared with `const` at the top level of a classic script, which
+// puts it in the global *lexical* environment — reachable as a bare identifier
+// from other scripts, but NOT as window.state. Several modules read it via
+// window.state (AudioEngine ducking and crossfade, TextRenderer custom fonts,
+// ui.js project open and rename) and every one was silently reading undefined
+// and no-oping. Publishing the same object reference fixes all of them at once;
+// both names point at one object, so mutation through either is seen by both.
+window.state = state;
+
 // Asset cache: maps assetId -> { file, objectUrl, element (video/audio/image), duration }
 const assetCache = new Map();
 let audioContext = null;
@@ -93,6 +102,10 @@ function initDOMElements() {
     canvas = document.getElementById('renderCanvas');
     if (!canvas) return; // Editor shell not visible yet
     ctx = canvas.getContext('2d');
+    // Same reasoning as window.state above — ui.js reads canvas dimensions to
+    // position objects on the composition.
+    window.canvas = canvas;
+    window.ctx = ctx;
     timelineContainer = document.getElementById('timelineContainer');
     timelineRuler = document.getElementById('timelineRuler');
     tracksContainer = document.getElementById('tracksContainer');
