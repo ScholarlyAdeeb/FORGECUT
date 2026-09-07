@@ -410,6 +410,23 @@
 
     <!-- Main Logic Scripts -->
     <script src="ui.js"></script>
-    <script src="editor.js"></script>
+    <!-- editor.js was split into these parts. They are classic scripts sharing
+         one global scope, so LOAD ORDER MATTERS: this sequence reproduces the
+         original single-file order exactly. -->
+    <script src="editor/editor-core.js"></script>
+    <script src="editor/editor-transport.js"></script>
+    <script src="editor/editor-render.js"></script>
+    <script src="editor/editor-timeline.js"></script>
+    <script src="editor/editor-chrome.js"></script>
+    <script src="editor/editor-events.js"></script>
+    <script src="editor/editor-clips.js"></script>
+    <script src="editor/editor-inspector.js"></script>
+    <script src="editor/editor-assets.js"></script>
+    <script src="editor/editor-csv.js"></script>
+    <script src="editor/editor-project.js"></script>
+    <script src="editor/editor-edit.js"></script>
+    <script src="editor/editor-lifecycle.js"></script>
+    <script src="editor/editor-interaction.js"></script>
+    <script src="editor/editor-extras.js"></script>
 </body>
 </html>
