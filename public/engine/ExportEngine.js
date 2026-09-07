@@ -75,8 +75,21 @@
     }
 
     /**
+     * Sleep until an absolute performance.now() deadline. Yields to the event
+     * loop at least once so the UI can repaint even if we are already late.
+     */
+    function _waitUntil(deadlineMs) {
+        const remaining = deadlineMs - performance.now();
+        return new Promise(resolve => setTimeout(resolve, remaining > 0 ? remaining : 0));
+    }
+
+    /**
      * Canvas-based render pipeline (fallback when FFmpeg unavailable).
      * Uses MediaRecorder API.
+     *
+     * Note: this path is inherently real-time and foreground-only — MediaRecorder
+     * timestamps frames off the wall clock, and browsers throttle background
+     * tabs. Long exports should use the FFmpeg path.
      */
     async function exportWithMediaRecorder(state, renderFn, options) {
         const canvas = options.canvas;
@@ -131,6 +144,13 @@
             const totalFrames = Math.ceil(duration * fps);
             const startTime = performance.now();
 
+            // canvas.captureStream(fps) samples the canvas on the wall clock, so
+            // the recording's length is however long this loop takes in real
+            // time. Pacing on requestAnimationFrame instead tied that to the
+            // display's refresh rate: at 60Hz a 30fps export rendered two frames
+            // per captured frame and the result played back at 2x speed (4x at
+            // 120Hz). Pacing to an absolute wall-clock deadline per frame keeps
+            // the output real-time and refresh-rate independent.
             for (let frame = 0; frame < totalFrames; frame++) {
                 if (_cancelRequested) {
                     recorder.stop();
@@ -156,7 +176,7 @@
                 }
 
                 updateProgressUI(frame, totalFrames, startTime);
-                await new Promise(r => requestAnimationFrame(r));
+                await _waitUntil(startTime + ((frame + 1) * 1000) / fps);
             }
 
             recorder.stop();

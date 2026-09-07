@@ -52,10 +52,11 @@ function runEditorInit() {
     setupCanvas();
     if (typeof renderTimeline === 'function') renderTimeline();
     if (typeof renderCanvasComposition === 'function') renderCanvasComposition();
-    // Start playback animation loop if PlaybackEngine loaded
-    if (window.ForgeCut && window.ForgeCut.PlaybackEngine && typeof window.ForgeCut.PlaybackEngine.start === 'function') {
-        window.ForgeCut.PlaybackEngine.start(state, renderCanvasComposition);
+    // Start the single render loop that drives playback and repaints.
+    if (!window.ForgeCut || !window.ForgeCut.PlaybackEngine) {
+        throw new Error('ForgeCut: PlaybackEngine failed to load — playback and rendering are unavailable.');
     }
+    window.ForgeCut.PlaybackEngine.start(state, renderFrame);
     window.selectRow = selectRow;
 }
 
@@ -67,24 +68,19 @@ window.addEventListener('DOMContentLoaded', () => {
     if (typeof setupBackstageNavigation === 'function') setupBackstageNavigation();
     if (typeof setupFileInputListeners === 'function') setupFileInputListeners();
 
-    // Canvas and visual setup deferred until editor shell is mounted
-    const waitForCanvas = setInterval(() => {
-        const shell = document.getElementById('fc-editor-shell');
-        const c = document.getElementById('renderCanvas');
-        if (c && shell && shell.style.display !== 'none') {
-            clearInterval(waitForCanvas);
-            runEditorInit();
-        }
-    }, 100);
-
-    // Fallback: if welcome is bypassed and editor shell was pre-shown
-    setTimeout(() => {
-        const c = document.getElementById('renderCanvas');
-        if (c && !_editorInitialized) {
-            runEditorInit();
-        }
-    }, 4000);
+    // If the shell is already visible (welcome screen bypassed) initialise now.
+    // Otherwise ui.js calls ForgeCut.initEditor() the moment it reveals the
+    // shell. This used to be a 100ms poll plus a blind 4s timeout, which could
+    // initialise the editor while the welcome screen was still up.
+    const shell = document.getElementById('fc-editor-shell');
+    if (shell && getComputedStyle(shell).display !== 'none') {
+        runEditorInit();
+    }
 });
+
+// Called by ui.js#launchEditor once the editor shell is on screen.
+window.ForgeCut = window.ForgeCut || {};
+window.ForgeCut.initEditor = runEditorInit;
 
 function initDOMElements() {
     canvas = document.getElementById('renderCanvas');
@@ -314,45 +310,19 @@ function syncMediaPlayback() {
     }
 }
 
-// Optimized RequestAnimationFrame loop for high-performance canvas composite
-let lastTime = 0;
+// The render loop itself lives in PlaybackEngine.start(); this is the frame
+// callback it drives. Marking state.needsRedraw (via requestRedraw) is what
+// schedules a repaint, so edits coalesce into one paint per frame instead of
+// repainting synchronously on every mutation.
 state.needsRedraw = true; // initially true to draw first frame
 window.requestRedraw = function () {
     state.needsRedraw = true;
 };
 
-function animationLoop(timestamp) {
-    requestAnimationFrame(animationLoop);
-
-    // Pause rendering when tab is inactive to save battery and performance
-    if (document.hidden) return;
-
-    if (!lastTime) lastTime = timestamp;
-    const delta = (timestamp - lastTime) / 1000;
-    lastTime = timestamp;
-
-    let played = false;
-    if (state.isPlaying) {
-        played = true;
-        if (window.ForgeCut && window.ForgeCut.PlaybackEngine) {
-            window.ForgeCut.PlaybackEngine.bindState(state);
-            window.ForgeCut.PlaybackEngine.advanceTime(delta);
-        } else {
-            let newTime = state.currentTime + delta;
-            if (newTime >= state.duration) {
-                newTime = state.duration;
-                pause();
-            }
-            setTime(newTime, false);
-        }
-    }
-
-    if (played || state.needsRedraw) {
-        state.needsRedraw = false;
-        updateTimecodeDisplay();
-        updatePlayheadUI();
-        renderCanvasComposition();
-    }
+function renderFrame() {
+    updateTimecodeDisplay();
+    updatePlayheadUI();
+    renderCanvasComposition();
 }
 
 // Render active clips onto the canvas
@@ -2382,7 +2352,7 @@ function updateInspector() {
         textHtml = `
             <div class="control-group">
                 <label>Text Value</label>
-                <input type="text" id="insp_text" value="${clip.text || ''}">
+                <input type="text" id="insp_text" value="${esc(clip.text || '')}">
             </div>
             <div class="control-group">
                 <label>Font Family</label>
@@ -3158,8 +3128,8 @@ window.handleAssetUpload = handleAssetUpload;
             item.innerHTML = `
             ${previewHtml}
             <div class="flex justify-between items-center w-full">
-                <span class="text-[10px] font-bold text-on-surface truncate w-32" title="${asset.name}">${asset.name}</span>
-                <button class="text-xs text-on-surface-variant hover:text-error bg-transparent border-none cursor-pointer p-0" onclick="removeUploadedAsset('${asset.id}', '${type}')">
+                <span class="text-[10px] font-bold text-on-surface truncate w-32" title="${esc(asset.name)}">${esc(asset.name)}</span>
+                <button class="text-xs text-on-surface-variant hover:text-error bg-transparent border-none cursor-pointer p-0" onclick="removeUploadedAsset('${esc(asset.id)}', '${esc(type)}')">
                     <span class="material-symbols-outlined text-sm">delete</span>
                 </button>
             </div>
@@ -3193,7 +3163,7 @@ window.handleAssetUpload = handleAssetUpload;
             <div class="flex items-center gap-3">
                 <span class="material-symbols-outlined text-primary">audiotrack</span>
                 <div class="flex flex-col">
-                    <span class="text-xs font-bold text-on-surface truncate w-36" title="${asset.name}">${asset.name}</span>
+                    <span class="text-xs font-bold text-on-surface truncate w-36" title="${esc(asset.name)}">${esc(asset.name)}</span>
                     <span class="text-[9px] text-outline">Audio Track Asset</span>
                 </div>
             </div>
@@ -3213,7 +3183,16 @@ window.handleAssetUpload = handleAssetUpload;
             track.clips = track.clips.filter(c => c.assetId !== assetId);
         });
 
-        URL.revokeObjectURL(asset.objectUrl);
+        // Route removal through MediaEngine so its own library drops the asset
+        // too. assetCache is a second index over the *same* asset objects, so
+        // revoking here without telling MediaEngine left it holding an entry
+        // with a dead objectUrl and a live media element — a leak, and a source
+        // of stale reads via PlaybackEngine's ME.getAsset() lookup.
+        if (window.ForgeCut && window.ForgeCut.MediaEngine) {
+            window.ForgeCut.MediaEngine.removeAsset(assetId);
+        } else if (asset.objectUrl) {
+            URL.revokeObjectURL(asset.objectUrl);
+        }
         assetCache.delete(assetId);
 
         const grid = document.getElementById('catalog-media-grid');
@@ -3261,7 +3240,20 @@ window.handleAssetUpload = handleAssetUpload;
             const tag = document.createElement('span');
             tag.className = 'label-tag';
             tag.style.cursor = 'pointer';
-            tag.innerHTML = `<span onclick="handleLabelTagClick('${ph}')">{{${ph}}}</span><button onclick="removePlaceholder(event, '${ph}')">&times;</button>`;
+            // Built as DOM nodes rather than an interpolated inline handler:
+            // placeholder names come from CSV column headers, and a header
+            // containing a quote used to break out of the onclick attribute and
+            // run as script.
+            const label = document.createElement('span');
+            label.textContent = `{{${ph}}}`;
+            label.addEventListener('click', () => window.handleLabelTagClick(ph));
+
+            const removeBtn = document.createElement('button');
+            removeBtn.innerHTML = '&times;';
+            removeBtn.addEventListener('click', (event) => window.removePlaceholder(event, ph));
+
+            tag.appendChild(label);
+            tag.appendChild(removeBtn);
             container.appendChild(tag);
         });
     }
@@ -3336,10 +3328,18 @@ window.handleAssetUpload = handleAssetUpload;
             const val2 = keys[1] ? row[keys[1]] || '' : '';
             const displayText = val2 ? `${val1} (${val2})` : val1;
 
-            item.innerHTML = `
-            <span class="row-text-val">${displayText || `Row ${idx + 1}`}</span>
-            <span class="badge-id">#${idx + 1}</span>
-        `;
+            // textContent, not innerHTML: these values come straight from the
+            // user's CSV and must never be parsed as markup.
+            const valueEl = document.createElement('span');
+            valueEl.className = 'row-text-val';
+            valueEl.textContent = displayText || `Row ${idx + 1}`;
+
+            const badgeEl = document.createElement('span');
+            badgeEl.className = 'badge-id';
+            badgeEl.textContent = `#${idx + 1}`;
+
+            item.appendChild(valueEl);
+            item.appendChild(badgeEl);
             rowSelectorList.appendChild(item);
         });
 
@@ -3456,7 +3456,7 @@ window.handleAssetUpload = handleAssetUpload;
                 </div>
             </div>
             <div class="batch-card-info">
-                <span class="batch-card-title" title="${titleText}">${titleText}</span>
+                <span class="batch-card-title" title="${esc(titleText)}">${esc(titleText)}</span>
                 ${subtitleVal ? `<span class="batch-card-tag">${subtitleVal}</span>` : ''}
             </div>
         `;
@@ -3736,7 +3736,7 @@ window.handleAssetUpload = handleAssetUpload;
             item.innerHTML = `
             <div style="display:flex; align-items:center; gap:0.5rem; flex:1;">
                 <input type="checkbox" class="queue-item-checkbox" ${state.batchSelection[idx] ? 'checked' : ''} onchange="toggleQueueSelection(${idx}, this.checked)">
-                <span style="font-size:0.75rem; cursor:pointer;" onclick="selectRow(${idx})">${idx + 1} - ${nameVal}</span>
+                <span style="font-size:0.75rem; cursor:pointer;" onclick="selectRow(${idx})">${idx + 1} - ${esc(nameVal)}</span>
             </div>
             <div style="display:flex; gap:0.25rem;">
                 <button onclick="selectRow(${idx})" style="padding:0.1rem 0.3rem; font-size:0.7rem; cursor:pointer; background:none; border:none; color:inherit;">👁️</button>
@@ -4410,11 +4410,20 @@ window.handleAssetUpload = handleAssetUpload;
     window.triggerNewProject = function (ratio) {
         if (!confirm('Are you sure you want to start a new project? All unsaved tracks and cached assets will be purged.')) return;
 
-        // Purge cached files and references
-        assetCache.forEach(asset => {
-            if (asset.objectUrl) URL.revokeObjectURL(asset.objectUrl);
-        });
+        // Purge cached files and references. MediaEngine owns the object URLs
+        // and media elements; clearing only assetCache used to strand its
+        // library for the rest of the session.
+        if (window.ForgeCut && window.ForgeCut.MediaEngine) {
+            window.ForgeCut.MediaEngine.clearAll();
+        } else {
+            assetCache.forEach(asset => {
+                if (asset.objectUrl) URL.revokeObjectURL(asset.objectUrl);
+            });
+        }
         assetCache.clear();
+        if (window.ForgeCut && window.ForgeCut.PlaybackEngine) {
+            window.ForgeCut.PlaybackEngine.clearPool();
+        }
 
         // Reset state vectors
         state.duration = 30;
@@ -4794,8 +4803,8 @@ window.handleAssetUpload = handleAssetUpload;
                 <span class="absolute bottom-2 left-2 text-[10px] bg-black/60 text-white px-2 py-0.5 rounded font-bold">Variation #${idx + 1}</span>
             </div>
             <div class="flex flex-col gap-1">
-                <span class="text-xs font-bold text-on-surface truncate">${nameVal}</span>
-                <span class="text-[10px] text-outline truncate">${keys.map(k => `${k}: ${row[k]}`).join(' | ')}</span>
+                <span class="text-xs font-bold text-on-surface truncate">${esc(nameVal)}</span>
+                <span class="text-[10px] text-outline truncate">${esc(keys.map(k => `${k}: ${row[k]}`).join(' | '))}</span>
             </div>
         `;
             container.appendChild(item);

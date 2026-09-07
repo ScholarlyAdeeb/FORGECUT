@@ -7,14 +7,72 @@
 
     const DRIFT_THRESHOLD = 0.1; // seconds
     const ELEMENT_POOL_MAX = 16;
+    // Largest time step we will ever apply in one frame. Without this, returning
+    // to a backgrounded tab hands us a multi-second delta and the playhead jumps.
+    const MAX_FRAME_DELTA = 0.25; // seconds
 
     let _state = null;
     let _playbackRate = 1.0;
     let _isLooping = false;
     let _elementPool = { video: [], audio: [] };
+    let _rafId = null;
+    let _renderFn = null;
+    let _lastTimestamp = 0;
 
     function bindState(stateRef) {
         _state = stateRef;
+    }
+
+    /**
+     * Start the transport render loop. This is the only animation loop in the
+     * app: it advances time while playing and repaints whenever the frame moved
+     * or something marked the composition dirty via state.needsRedraw.
+     * Safe to call repeatedly — a second call will not start a second loop.
+     */
+    function start(stateRef, renderFn) {
+        if (stateRef) bindState(stateRef);
+        if (typeof renderFn === 'function') _renderFn = renderFn;
+        if (_rafId !== null) return;
+        _lastTimestamp = 0;
+        _rafId = requestAnimationFrame(_tick);
+    }
+
+    function stopLoop() {
+        if (_rafId === null) return;
+        cancelAnimationFrame(_rafId);
+        _rafId = null;
+        _lastTimestamp = 0;
+    }
+
+    function isRunning() {
+        return _rafId !== null;
+    }
+
+    function _tick(timestamp) {
+        _rafId = requestAnimationFrame(_tick);
+
+        // Skip work while the tab is hidden, but keep the loop alive so playback
+        // resumes cleanly. Reset the clock so the next visible frame gets a
+        // sane delta instead of the whole hidden duration.
+        if (document.hidden) {
+            _lastTimestamp = 0;
+            return;
+        }
+
+        if (!_lastTimestamp) _lastTimestamp = timestamp;
+        const delta = Math.min((timestamp - _lastTimestamp) / 1000, MAX_FRAME_DELTA);
+        _lastTimestamp = timestamp;
+
+        let moved = false;
+        if (_state && _state.isPlaying) {
+            moved = advanceTime(delta);
+            syncAllMedia();
+        }
+
+        if (moved || (_state && _state.needsRedraw)) {
+            if (_state) _state.needsRedraw = false;
+            if (_renderFn) _renderFn();
+        }
     }
 
     function getOrCreateElement(type, src) {
@@ -124,6 +182,7 @@
     function seekTo(time) {
         if (!_state) return;
         _state.currentTime = Math.max(0, Math.min(_state.duration, time));
+        _state.needsRedraw = true;
         syncAllMedia();
     }
 
@@ -134,7 +193,10 @@
             if (_isLooping) {
                 newTime = 0;
             } else {
-                newTime = _state.duration;
+                // Park exactly on the last frame before pausing, otherwise the
+                // playhead stops short of the end of the composition.
+                _state.currentTime = _state.duration;
+                _state.needsRedraw = true;
                 pause();
                 return false;
             }
@@ -240,6 +302,7 @@
     window.ForgeCut = window.ForgeCut || {};
     window.ForgeCut.PlaybackEngine = {
         bindState,
+        start, stopLoop, isRunning,
         play, pause, stop, togglePlay, toggleLoop,
         setPlaybackRate, getPlaybackRate,
         stepForward, stepBackward, seekTo,

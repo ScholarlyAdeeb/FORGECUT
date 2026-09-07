@@ -80,6 +80,12 @@ window.launchEditor = function(ratio) {
         if (editorShell) {
             editorShell.style.display = 'flex';
 
+            // Canvas setup is deferred until the shell is on screen, so tell the
+            // editor to initialise now rather than leaving it to poll for us.
+            if (window.ForgeCut && typeof window.ForgeCut.initEditor === 'function') {
+                window.ForgeCut.initEditor();
+            }
+
             // Trigger keyframe entry animation
             requestAnimationFrame(() => {
                 editorShell.classList.add('editor-entering');
