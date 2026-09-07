@@ -1,0 +1,18 @@
+# Render blueprint — https://render.com/docs/blueprint-spec
+#
+# ForgeCut must be served by this Node process, not as static files: the
+# Cross-Origin-Opener-Policy and Cross-Origin-Embedder-Policy response headers
+# in server.js are what enable SharedArrayBuffer, and FFmpeg.wasm will not load
+# without them. Static hosts that cannot set response headers (GitHub Pages)
+# will serve the UI but exports will fail.
+services:
+  - type: web
+    name: forgecut
+    runtime: node
+    plan: free
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
