@@ -270,21 +270,14 @@
             }
 
             // Editing
-            else if (isCtrl && e.key.toLowerCase() === 'z') {
-                e.preventDefault();
-                if (window.HistoryManager) window.HistoryManager.undo(state);
-                renderTimeline();
-                renderCanvasComposition();
-                syncMediaPlayback();
-                updateInspector();
-            } else if ((isCtrl && e.key.toLowerCase() === 'y') || (isCtrl && isShift && e.key.toLowerCase() === 'z')) {
-                e.preventDefault();
-                if (window.HistoryManager) window.HistoryManager.redo(state);
-                renderTimeline();
-                renderCanvasComposition();
-                syncMediaPlayback();
-                updateInspector();
-            } else if (isCtrl && e.key.toLowerCase() === 'c') {
+            //
+            // Ctrl+Z / Ctrl+Y are handled by KeyboardShortcuts.js, which calls
+            // triggerUndo/triggerRedo. The duplicate handler that used to live
+            // here read window.HistoryManager — the manager is actually at
+            // window.ForgeCut.HistoryManager, so the guard was always false and
+            // the branch only ever swallowed the keystroke and re-rendered.
+            // Repairing it rather than removing it would undo twice per press.
+            else if (isCtrl && e.key.toLowerCase() === 'c') {
                 e.preventDefault();
                 window.timelineCopy();
             } else if (isCtrl && e.key.toLowerCase() === 'v') {

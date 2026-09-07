@@ -18,6 +18,19 @@ async function handleAssetUpload(file, type) {
 
         try {
             const asset = await window.ForgeCut.MediaEngine.importFile(file, type);
+
+            // The browser reports an unplayable container/codec on the media
+            // element rather than by throwing, so without this check an
+            // undecodable file became a 0-duration clip on the timeline that
+            // silently rendered nothing.
+            if (asset.error) {
+                window.ForgeCut.MediaEngine.removeAsset(asset.id);
+                const msg = `${asset.error}: ${file.name}`;
+                if (statusText) statusText.textContent = msg;
+                if (typeof fcToast === 'function') fcToast(msg);
+                return;
+            }
+
             assetCache.set(asset.id, asset);
             addUploadFileItem(asset, asset.type);
 
@@ -62,7 +75,7 @@ async function handleAssetUpload(file, type) {
 
                     assetCache.set(audioAssetId, audioAsset);
                     if (window.ForgeCut && window.ForgeCut.MediaEngine) {
-                        window.ForgeCut.MediaEngine.mediaLibrary.set(audioAssetId, audioAsset);
+                        window.ForgeCut.MediaEngine.library.set(audioAssetId, audioAsset);
                     }
 
                     const audioTrack = state.tracks.find(t => t.id === 'audioTrack');

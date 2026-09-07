@@ -164,8 +164,69 @@
         fcToast('Applied brand kit settings.');
     };
 
-    window.uploadBrandAsset = function (type) {
-        fcToast(`Import brand asset logic active for: ${type}`);
+    /**
+     * Brand Kit imports. These three buttons only announced themselves before.
+     *
+     * Fonts go through MediaEngine's font path, which already loads a FontFace
+     * and registers it — it simply had no UI entry point anywhere in the app
+     * until now. Logos are imported as ordinary image assets, so they land on
+     * the timeline and can be positioned like any other overlay rather than
+     * needing a separate watermark subsystem.
+     */
+    window.uploadBrandAsset = async function (type) {
+        if (type === 'colors') {
+            const hex = await fcPrompt('Brand colour (hex), applied as the canvas background:', state.bgColor || '#005faa');
+            if (!hex) return;
+            const value = hex.trim();
+            if (!/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(value)) {
+                fcToast(`"${value}" is not a valid hex colour.`, 'error');
+                return;
+            }
+            state.brandColor = value;
+            state.bgType = 'solid';
+            state.bgColor = value;
+            renderCanvasComposition();
+            fcToast(`Brand colour set to ${value}.`);
+            return;
+        }
+
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = type === 'font' ? '.ttf,.otf,.woff,.woff2,font/*' : 'image/*';
+        input.addEventListener('change', async (e) => {
+            const file = e.target.files && e.target.files[0];
+            if (!file) return;
+
+            if (type === 'font') {
+                const ME = window.ForgeCut && window.ForgeCut.MediaEngine;
+                if (!ME) return;
+                const result = await ME.loadFont(file);
+                if (!result.loaded) {
+                    fcToast(`Could not load font: ${file.name}`, 'error');
+                    return;
+                }
+                state.brandFont = result.fontName;
+                // Offer the freshly loaded family to the inspector's font picker.
+                document.querySelectorAll('select#textFontSelect, select[id*="ontSelect"]').forEach(selectEl => {
+                    if (Array.from(selectEl.options).some(o => o.value === result.fontName)) return;
+                    const opt = document.createElement('option');
+                    opt.value = result.fontName;
+                    opt.textContent = result.fontName;
+                    selectEl.appendChild(opt);
+                });
+                updateInspector();
+                fcToast(`Brand font "${result.fontName}" loaded and available to text clips.`);
+                return;
+            }
+
+            // Logo: reuse the media import pipeline so it becomes a real asset.
+            if (typeof handleAssetUpload === 'function') {
+                await handleAssetUpload(file, 'image');
+                state.brandLogoName = file.name;
+                fcToast(`Brand logo "${file.name}" imported onto the timeline.`);
+            }
+        });
+        input.click();
     };
 
     // Safe Guide platform overlays
@@ -238,10 +299,30 @@
     };
 
     // Animations drawer & configurations
+    /**
+     * The animation controls live in the Inspector's Animation section, not in
+     * the Export Queue — this used to open the queue tab while claiming to have
+     * opened an animation list, so the button appeared to do nothing relevant.
+     */
     window.toggleAnimationPane = function () {
-        const rightPanel = document.querySelector('[data-right-tab="queue"]');
-        if (rightPanel) rightPanel.click();
-        fcToast('Animation list panel active on Right Sidebar.');
+        const inspectorTab = document.querySelector('[data-right-tab="inspector"]');
+        if (inspectorTab) inspectorTab.click();
+
+        if (!state.selectedClipId) {
+            fcToast('Select a clip to edit its animations in the Inspector.');
+            return;
+        }
+        updateInspector();
+        // Expand the Animation section and bring it into view.
+        const section = document.querySelector('[data-section="animation"]')
+            || document.getElementById('inspector-section-animation');
+        if (section) {
+            section.classList.remove('hidden');
+            const header = section.previousElementSibling;
+            if (header && section.classList.contains('collapsed')) header.click();
+            section.scrollIntoView({ block: 'nearest' });
+        }
+        fcToast('Animation controls are in the Inspector.');
     };
 
     window.updateAnimationParameters = function () {
@@ -344,8 +425,103 @@
     };
 
     // Bulk Production & CSV dynamic configuration
+    /**
+     * Map CSV columns onto text clips.
+     *
+     * Previously this only listed the placeholder names in a toast, so there
+     * was no way to actually map anything from the ribbon. The underlying
+     * primitives already existed (handleLabelTagClick binds a column to the
+     * selected text clip, addNewTextClipWithPlaceholder creates one), so this
+     * is a real surface over them rather than a new mechanism.
+     */
     window.openColumnMapper = function () {
-        fcToast(`Column variable mapper is operational. Current dynamic placeholders: ${state.placeholders.join(', ')}`);
+        if (!state.csvData || state.csvData.length === 0) {
+            fcToast('Import a CSV configuration first.');
+            return;
+        }
+        // Take the columns from state.placeholders: that is the canonical list
+        // the CSV parser derives from the header row (trimmed, blanks dropped)
+        // and the one removePlaceholder edits. Reading Object.keys() off a
+        // parsed row instead kept the header's original padding, so a file
+        // written as "name , title" produced {{name }} — a placeholder the
+        // renderer substitutes nothing for — and deleted columns lingered here.
+        const columns = (state.placeholders && state.placeholders.length)
+            ? state.placeholders.slice()
+            : Object.keys(state.csvData[0] || {}).map(k => k.trim()).filter(Boolean);
+        if (columns.length === 0) {
+            fcToast('That CSV has no columns to map.');
+            return;
+        }
+
+        const textTrack = state.tracks.find(t => t.id === 'textTrack');
+        const usedIn = (col) => (textTrack ? textTrack.clips : [])
+            .filter(c => typeof c.text === 'string' && c.text.indexOf(`{{${col}}}`) !== -1).length;
+
+        const selected = state.selectedClipId ? findClipById(state.selectedClipId) : null;
+        const selectedIsText = !!(selected && textTrack && textTrack.clips.includes(selected));
+
+        window.fcModal('Map CSV columns to text clips', {
+            okLabel: 'Done',
+            cancelLabel: 'Close',
+            cancelValue: null,
+            build(modal) {
+                const hint = document.createElement('div');
+                hint.style.cssText = 'margin:-6px 0 12px;font-size:12px;opacity:.75';
+                hint.textContent = selectedIsText
+                    ? `Bind applies to the selected text clip "${selected.name || selected.text}".`
+                    : 'No text clip selected — use "New clip" to create one per column.';
+                modal.appendChild(hint);
+
+                const list = document.createElement('div');
+                list.style.cssText = 'max-height:46vh;overflow:auto;display:flex;flex-direction:column;gap:6px;margin-bottom:14px';
+
+                columns.forEach(col => {
+                    const row = document.createElement('div');
+                    row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;background:var(--surface,#f8f9ff)';
+
+                    const name = document.createElement('span');
+                    // min-width:0 lets a long header ellipsise instead of
+                    // stretching the row past the dialog's edge.
+                    name.style.cssText = 'flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:ui-monospace,monospace;font-size:12px';
+                    name.textContent = `{{${col}}}`;
+                    name.title = col;
+
+                    const count = document.createElement('span');
+                    count.style.cssText = 'font-size:11px;opacity:.7;min-width:58px;text-align:right';
+                    const n = usedIn(col);
+                    count.textContent = n ? `${n} clip${n > 1 ? 's' : ''}` : 'unused';
+
+                    const mkBtn = (label, onClick) => {
+                        const b = document.createElement('button');
+                        b.textContent = label;
+                        b.style.cssText = 'padding:4px 10px;font:600 11px system-ui,sans-serif;border-radius:5px;border:none;cursor:pointer;background:var(--surface-container-highest,#e0e2ea);color:inherit';
+                        b.addEventListener('click', (ev) => { ev.preventDefault(); onClick(); });
+                        return b;
+                    };
+
+                    const bindBtn = mkBtn('Bind', () => {
+                        window.handleLabelTagClick(col);
+                        count.textContent = `${usedIn(col)} clip(s)`;
+                        fcToast(`Bound {{${col}}} to the selected clip.`);
+                    });
+                    bindBtn.disabled = !selectedIsText;
+                    if (!selectedIsText) bindBtn.style.opacity = '.45';
+
+                    const newBtn = mkBtn('New clip', () => {
+                        if (state.placeholders.indexOf(col) === -1) state.placeholders.push(col);
+                        window.addNewTextClipWithPlaceholder(col);
+                        count.textContent = `${usedIn(col)} clip(s)`;
+                        fcToast(`Added a text clip for {{${col}}}.`);
+                    });
+
+                    row.append(name, count, bindBtn, newBtn);
+                    list.appendChild(row);
+                });
+
+                modal.appendChild(list);
+                return () => true;
+            }
+        });
     };
 
     window.validateCsvMapping = function () {

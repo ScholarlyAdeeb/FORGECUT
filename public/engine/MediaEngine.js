@@ -8,6 +8,8 @@
     const mediaLibrary = new Map();
     // Enough for magic-number detection plus an EXIF block on images.
     const HEADER_BYTES = 64 * 1024;
+    // Upper bound on waiting for a decoded frame to grab a thumbnail from.
+    const THUMBNAIL_TIMEOUT_MS = 5000;
     let worker = null;
     let pendingImports = new Map();
     let audioCtxForDecode = null;
@@ -101,6 +103,21 @@
         });
     }
 
+    /**
+     * Why a media element refused to load, in a form the UI can show. The
+     * browser reports codec/container rejection here rather than by throwing,
+     * so this is the only signal that an import produced an unusable asset.
+     */
+    function describeMediaError(element) {
+        const err = element && element.error;
+        if (!err) return 'Media could not be loaded';
+        if (err.code === 4) return 'Unsupported format or codec';
+        if (err.code === 3) return 'Corrupt or undecodable media';
+        if (err.code === 2) return 'Network error while reading media';
+        if (err.code === 1) return 'Media loading aborted';
+        return 'Media could not be loaded';
+    }
+
     function createMediaElement(type, objectUrl) {
         let element = null;
         if (type === 'video') {
@@ -126,21 +143,50 @@
     async function generateThumbnail(element, type) {
         return new Promise((resolve) => {
             if (type === 'video') {
-                const onSeeked = () => {
+                // A video the browser could not decode (AVI, an exotic codec, a
+                // corrupt file) never fires 'seeked', so waiting on that event
+                // hung the whole import forever — the status bar stayed on
+                // "Processing ..." and the asset was never added. Bail out
+                // before seeking when the element is already known to be
+                // unusable, and never wait on the event without a deadline.
+                if (element.error || !element.duration || !isFinite(element.duration)) {
+                    resolve(null);
+                    return;
+                }
+                let settled = false;
+                let timer = null;
+                const finish = (value) => {
+                    if (settled) return;
+                    settled = true;
+                    if (timer) clearTimeout(timer);
                     element.removeEventListener('seeked', onSeeked);
+                    element.removeEventListener('error', onError);
+                    resolve(value);
+                };
+                const onSeeked = () => {
                     try {
                         const c = document.createElement('canvas');
                         c.width = element.videoWidth || 320;
                         c.height = element.videoHeight || 180;
                         const cx = c.getContext('2d');
                         cx.drawImage(element, 0, 0, c.width, c.height);
-                        resolve(c.toDataURL('image/jpeg', 0.6));
+                        finish(c.toDataURL('image/jpeg', 0.6));
                     } catch (e) {
-                        resolve(null);
+                        finish(null);
                     }
                 };
+                const onError = () => finish(null);
                 element.addEventListener('seeked', onSeeked);
-                element.currentTime = Math.min(1, element.duration || 1);
+                element.addEventListener('error', onError);
+                // Last-resort deadline: a decoder can also accept the seek and
+                // then stall without ever emitting 'seeked'. A missing
+                // thumbnail is cosmetic; a wedged import is not.
+                timer = setTimeout(() => finish(null), THUMBNAIL_TIMEOUT_MS);
+                try {
+                    element.currentTime = Math.min(1, element.duration);
+                } catch (e) {
+                    finish(null);
+                }
             } else if (type === 'image') {
                 try {
                     const c = document.createElement('canvas');
@@ -267,7 +313,7 @@
             duration: 0, fps: 0, bitrate: 0,
             width: 0, height: 0, codec: workerMeta.format,
             exifOrientation: workerMeta.exifOrientation || 1,
-            loaded: false
+            loaded: false, error: null
         };
 
         // Wait for element to load metadata
@@ -283,7 +329,7 @@
                     asset.loaded = true;
                     resolve();
                 };
-                element.onerror = () => { asset.loaded = true; resolve(); };
+                element.onerror = () => { asset.loaded = true; asset.error = describeMediaError(element); resolve(); };
             } else if (type === 'audio') {
                 element.onloadedmetadata = () => {
                     asset.duration = element.duration || 0;
@@ -292,7 +338,7 @@
                     asset.loaded = true;
                     resolve();
                 };
-                element.onerror = () => { asset.loaded = true; resolve(); };
+                element.onerror = () => { asset.loaded = true; asset.error = describeMediaError(element); resolve(); };
             } else if (type === 'image') {
                 element.onload = () => {
                     asset.width = element.naturalWidth || element.width;
@@ -301,7 +347,7 @@
                     asset.loaded = true;
                     resolve();
                 };
-                element.onerror = () => { asset.loaded = true; resolve(); };
+                element.onerror = () => { asset.loaded = true; asset.error = describeMediaError(element); resolve(); };
             } else {
                 asset.loaded = true;
                 resolve();

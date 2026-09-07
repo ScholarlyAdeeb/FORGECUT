@@ -435,26 +435,85 @@ window.alignText = function(clipId, align) {
     }
 };
 
-window.positionObject = function(clipId, posType) {
-    if (!window.findClipById || !window.state || !window.state.resolution) return;
+/**
+ * Half the rendered size of a clip, so edge and corner placements can sit the
+ * object's bounding box against the canvas rather than its centre point.
+ * Returns zeros when the size cannot be determined, which degrades to the old
+ * centre-on-the-edge behaviour rather than throwing.
+ */
+function clipHalfExtent(clip) {
+    const scale = clip.scale !== undefined ? clip.scale : 1;
+
+    const ME = window.ForgeCut && window.ForgeCut.MediaEngine;
+    const asset = clip.assetId && ME ? ME.getAsset(clip.assetId) : null;
+    const el = asset && asset.element;
+    if (el) {
+        const w = el.videoWidth || el.naturalWidth || el.width || 0;
+        const h = el.videoHeight || el.naturalHeight || el.height || 0;
+        if (w && h) return { hw: (w * scale) / 2, hh: (h * scale) / 2 };
+    }
+
+    if (clip.shapeProps && clip.shapeProps.width && clip.shapeProps.height) {
+        return { hw: (clip.shapeProps.width * scale) / 2, hh: (clip.shapeProps.height * scale) / 2 };
+    }
+
+    if (typeof clip.text === 'string' && clip.text.length) {
+        const canvasEl = document.getElementById('renderCanvas');
+        const ctx = canvasEl && canvasEl.getContext('2d');
+        if (ctx) {
+            const size = clip.size || 72;
+            ctx.save();
+            ctx.font = `${size}px ${clip.font || 'Arial'}`;
+            const measured = ctx.measureText(clip.text).width;
+            ctx.restore();
+            return { hw: (measured * scale) / 2, hh: (size * scale) / 2 };
+        }
+    }
+
+    return { hw: 0, hh: 0 };
+}
+
+window.positionObject = function (clipId, posType) {
+    if (!window.findClipById) return;
     const clip = window.findClipById(clipId);
     if (!clip) return;
-    const cw = window.state.resolution.width;
-    const ch = window.state.resolution.height;
-    switch(posType) {
-        case 'center':      clip.x = cw/2;  clip.y = ch/2;  break;
-        case 'top-left':    clip.x = 0;     clip.y = 0;     break;
-        case 'top-center':  clip.x = cw/2;  clip.y = 0;     break;
-        case 'top-right':   clip.x = cw;    clip.y = 0;     break;
-        case 'mid-left':    clip.x = 0;     clip.y = ch/2;  break;
-        case 'mid-right':   clip.x = cw;    clip.y = ch/2;  break;
-        case 'bot-left':    clip.x = 0;     clip.y = ch;    break;
-        case 'bot-center':  clip.x = cw/2;  clip.y = ch;    break;
-        case 'bot-right':   clip.x = cw;    clip.y = ch;    break;
+
+    // The canvas element is the only place the composition size actually
+    // lives. This used to read window.state.resolution, which no state object
+    // ever defines, so the guard returned early and all nine Quick Positioning
+    // buttons silently did nothing.
+    const canvasEl = document.getElementById('renderCanvas');
+    const cw = (canvasEl && canvasEl.width) || (window.state && window.state.canvasWidth) || 1920;
+    const ch = (canvasEl && canvasEl.height) || (window.state && window.state.canvasHeight) || 1080;
+
+    // Clips are drawn centred on (x, y) — the renderer translates to the point
+    // and then draws at -width/2, -height/2 — so anchoring to an edge means
+    // insetting by half the object, not sitting the centre on the edge.
+    const { hw, hh } = clipHalfExtent(clip);
+    const clampX = (v) => Math.max(0, Math.min(cw, v));
+    const clampY = (v) => Math.max(0, Math.min(ch, v));
+    const left = clampX(hw), right = clampX(cw - hw), midX = cw / 2;
+    const top = clampY(hh), bottom = clampY(ch - hh), midY = ch / 2;
+
+    // Snapshot before mutating: pushState clones the *current* state, so
+    // saving afterwards would make undo restore the already-moved position.
+    if (window.saveStateToHistory) window.saveStateToHistory('Position Object');
+
+    switch (posType) {
+        case 'center':      clip.x = midX;  clip.y = midY;   break;
+        case 'top-left':    clip.x = left;  clip.y = top;    break;
+        case 'top-center':  clip.x = midX;  clip.y = top;    break;
+        case 'top-right':   clip.x = right; clip.y = top;    break;
+        case 'mid-left':    clip.x = left;  clip.y = midY;   break;
+        case 'mid-right':   clip.x = right; clip.y = midY;   break;
+        case 'bot-left':    clip.x = left;  clip.y = bottom; break;
+        case 'bot-center':  clip.x = midX;  clip.y = bottom; break;
+        case 'bot-right':   clip.x = right; clip.y = bottom; break;
+        default: return;
     }
+
     if (window.renderCanvasComposition) window.renderCanvasComposition();
     if (window.updateInspector) window.updateInspector();
-    if (window.saveStateToHistory) window.saveStateToHistory('Position Object');
 };
 
 

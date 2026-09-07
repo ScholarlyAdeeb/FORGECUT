@@ -40,7 +40,10 @@ function updateInspector() {
     const kf = (prop) => {
         const localTime = state.currentTime - clip.startTime;
         const hasKf = clip.keyframes && clip.keyframes[prop] && clip.keyframes[prop].some(kf => Math.abs(kf.time - localTime) < 0.15);
-        return `<span class="material-symbols-outlined text-[14px] cursor-pointer ${hasKf ? 'text-blue-500 font-bold' : 'text-white/40'} hover:text-blue-500 mr-1 select-none align-middle" onclick="window.toggleKeyframe('${clip.id}', '${prop}')" title="Toggle Keyframe">change_history</span>`;
+        // Colours come from .kf-toggle in editor.css so the marker follows the
+        // theme. It used to be hardcoded to text-white/40, which is all but
+        // invisible on the light theme's near-white inspector panel.
+        return `<span class="material-symbols-outlined kf-toggle${hasKf ? ' kf-active' : ''} select-none align-middle" onclick="window.toggleKeyframe('${clip.id}', '${prop}')" title="Toggle Keyframe">change_history</span>`;
     };
 
     const renderSection = (title, id, contentHtml) => {
@@ -92,7 +95,7 @@ function updateInspector() {
                 </div>
             </div>
             <div class="control-group">
-                <label>${kf('rotation')} Rotation (deg)</label>
+                <label>${kf('rotation')} Rotation<span class="control-value" data-value-for="insp_rot">${Math.round(clip.rotation || 0)}&deg;</span></label>
                 <input type="range" id="insp_rot" min="0" max="360" value="${clip.rotation || 0}">
             </div>
         `;
@@ -102,7 +105,7 @@ function updateInspector() {
     if (track.type === 'video' || track.type === 'text' || track.type === 'image' || track.type === 'shape') {
         appearanceHtml = `
             <div class="control-group">
-                <label>${kf('opacity')} Opacity</label>
+                <label>${kf('opacity')} Opacity<span class="control-value" data-value-for="insp_opacity">${Math.round((clip.opacity !== undefined ? clip.opacity : 1.0) * 100)}%</span></label>
                 <input type="range" id="insp_opacity" min="0" max="100" value="${Math.round((clip.opacity !== undefined ? clip.opacity : 1.0) * 100)}">
             </div>
         `;
@@ -110,11 +113,11 @@ function updateInspector() {
         if (track.type === 'video' || track.type === 'image') {
             appearanceHtml += `
                 <div class="control-group">
-                    <label>${kf('scale')} Scale</label>
+                    <label>${kf('scale')} Scale<span class="control-value" data-value-for="insp_scale">${Math.round((clip.scale || 1.0) * 100)}%</span></label>
                     <input type="range" id="insp_scale" min="10" max="300" value="${Math.round((clip.scale || 1.0) * 100)}">
                 </div>
                 <div class="control-group">
-                    <label>${kf('blur')} Blur (px)</label>
+                    <label>${kf('blur')} Blur<span class="control-value" data-value-for="insp_blur">${clip.blur || 0}px</span></label>
                     <input type="range" id="insp_blur" min="0" max="50" value="${clip.blur || 0}">
                 </div>
                 <div class="control-group">
@@ -753,6 +756,20 @@ function updateInspector() {
         fontEl.addEventListener('change', (e) => {
             clip.font = e.target.value;
             renderCanvasComposition();
+        });
+    }
+
+    // Keep each slider's readout in step with the thumb. One delegated pass
+    // rather than a bespoke handler per control, so any future range input
+    // gets a live value simply by carrying a matching data-value-for span.
+    if (inspectorSection) {
+        const SUFFIX = { insp_rot: '°', insp_opacity: '%', insp_scale: '%', insp_blur: 'px' };
+        inspectorSection.querySelectorAll('input[type="range"]').forEach(range => {
+            const readout = inspectorSection.querySelector(`[data-value-for="${range.id}"]`);
+            if (!readout) return;
+            range.addEventListener('input', () => {
+                readout.textContent = `${range.value}${SUFFIX[range.id] || ''}`;
+            });
         });
     }
 

@@ -111,14 +111,34 @@ function setupFileInputListeners() {
     bindInput('audioFileInput', 'audio');
     bindInput('imageFileInput', 'image');
 
+    // Inputs that accept more than one kind of media have to pick the type per
+    // file instead of being pinned to one.
+    const typeForFile = (file) => {
+        if (file.type.startsWith('audio')) return 'audio';
+        if (file.type.startsWith('image')) return 'image';
+        return 'video';
+    };
+
+    // The Import button in the Project Media panel (accept="video/*,image/*",
+    // multiple). It had no listener at all, so choosing a file through the
+    // panel's most obvious import affordance silently did nothing.
+    const mediaImportBtnInput = document.getElementById('mediaImportBtnInput');
+    if (mediaImportBtnInput) {
+        mediaImportBtnInput.addEventListener('change', (e) => {
+            for (let file of e.target.files) {
+                handleAssetUpload(file, typeForFile(file));
+            }
+            // Clear the selection so picking the same file again re-fires
+            // 'change' rather than looking like another dead button.
+            e.target.value = '';
+        });
+    }
+
     const backstageUploadInput = document.getElementById('backstageUploadInput');
     if (backstageUploadInput) {
         backstageUploadInput.addEventListener('change', (e) => {
             for (let file of e.target.files) {
-                let type = 'video';
-                if (file.type.startsWith('audio')) type = 'audio';
-                else if (file.type.startsWith('image')) type = 'image';
-                handleAssetUpload(file, type);
+                handleAssetUpload(file, typeForFile(file));
             }
             closeBackstage();
         });
@@ -136,9 +156,11 @@ if (!window.closeBackstage) window.closeBackstage = function () {
     if (backstage) { backstage.classList.add('hidden'); backstage.style.display = 'none'; }
 };
 
-// Undo / Redo mock hooks
-window.triggerUndo = function () { fcToast('Undo action completed'); };
-window.triggerRedo = function () { fcToast('Redo action completed'); };
+// Undo / Redo are implemented for real in editor-project.js on top of
+// HistoryManager. The mock hooks that used to sit here only ever showed a
+// toast, and were shadowed purely because editor-project.js happens to load
+// later in index.html — reordering the scripts would have silently turned
+// undo back into a no-op.
 
 // Native App Commands simulations
 window.openProjectSettings = function () {

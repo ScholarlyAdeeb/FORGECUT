@@ -196,9 +196,14 @@
     window.ForgeCut.toast = toast;
     window.ForgeCut.confirm = confirmDialog;
     window.ForgeCut.prompt = promptDialog;
+    // Exposed so ribbon features that need more than a text field (a column
+    // mapper, a capture-source picker) get the same focus handling, Escape
+    // trapping and styling as the built-in dialogs instead of hand-rolling one.
+    window.ForgeCut.modal = openModal;
 
     // Short aliases for the many call sites.
     window.fcToast = toast;
     window.fcConfirm = confirmDialog;
     window.fcPrompt = promptDialog;
+    window.fcModal = openModal;
 })();

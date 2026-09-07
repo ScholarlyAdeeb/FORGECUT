@@ -254,12 +254,18 @@ function renderTracks() {
             if (track.type === 'video' || track.type === 'image') {
                 const asset = assetCache.get(clip.assetId);
                 if (asset && asset.objectUrl) {
-                    if (track.type === 'image') {
+                    // Key the filmstrip off what the asset actually is, not the
+                    // track it sits on. Images are placed on videoTrack2, which
+                    // is type 'video', so the image branch below was dead code
+                    // and every image clip instead built a row of <video>
+                    // elements pointed at an image blob — one failed resource
+                    // load per thumbnail slot, and no thumbnail on the clip.
+                    if (asset.type === 'image') {
                         const img = document.createElement('img');
                         img.src = asset.objectUrl;
                         img.className = 'absolute inset-0 w-full h-full object-cover opacity-20 pointer-events-none';
                         clipEl.appendChild(img);
-                    } else if (track.type === 'video') {
+                    } else if (asset.type === 'video') {
                         // Thumbnail strip
                         const thumbStrip = document.createElement('div');
                         thumbStrip.className = 'absolute inset-0 w-full h-full flex overflow-hidden pointer-events-none opacity-20';
@@ -289,10 +295,17 @@ function renderTracks() {
 
             const titleSpan = document.createElement('span');
             titleSpan.className = 'clip-title z-10 flex flex-col items-start gap-0.5 pl-1 select-none pointer-events-none';
-            titleSpan.innerHTML = `
-                <div class="font-bold truncate max-w-full text-[10px] text-white">${clip.name || clip.text || track.name}</div>
-                <div class="text-[8px] text-gray-300">${clip.duration.toFixed(2)}s</div>
-            `;
+            // Built as text nodes, not innerHTML: clip.name is the imported
+            // file's name and clip.text is user-typed, so interpolating either
+            // into markup let a filename like `<img src=x onerror=...>.mp4`
+            // (legal on macOS and Linux) run script when the clip was drawn.
+            const clipNameEl = document.createElement('div');
+            clipNameEl.className = 'font-bold truncate max-w-full text-[10px] text-white';
+            clipNameEl.textContent = clip.name || clip.text || track.name;
+            const clipDurEl = document.createElement('div');
+            clipDurEl.className = 'text-[8px] text-gray-300';
+            clipDurEl.textContent = `${clip.duration.toFixed(2)}s`;
+            titleSpan.append(clipNameEl, clipDurEl);
             clipEl.appendChild(titleSpan);
 
             // Trim handles

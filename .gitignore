@@ -6,3 +6,7 @@ temp_output*.txt
 out/
 .env
 .env.local
+
+# Generated media-import test corpus (~2.2GB); regenerate with
+# test/media-import/make-media.sh
+public/__testmedia/

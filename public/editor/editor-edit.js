@@ -103,8 +103,55 @@
         }
     };
 
+    /**
+     * Trim the selected clip's nearer edge to the playhead.
+     *
+     * Dragging a clip edge on the timeline already worked; the ribbon button
+     * only described that, so the one place a keyboard-driven editor would
+     * reach for Trim did nothing. Trimming the head advances trimStart so the
+     * media keeps playing from the right frame, which is what PlaybackEngine
+     * reads when it maps timeline time onto element time.
+     */
     window.triggerTrim = function () {
-        fcToast('Trim tool active. You can drag the left or right edges of any clip on the timeline to trim its duration.');
+        if (!state.selectedClipId) {
+            fcToast('Please select a clip to trim.');
+            return;
+        }
+        const clip = findClipById(state.selectedClipId);
+        if (!clip) return;
+
+        const playhead = state.currentTime;
+        const clipEnd = clip.startTime + clip.duration;
+        const MIN_DURATION = 0.1;
+        if (playhead <= clip.startTime + MIN_DURATION || playhead >= clipEnd - MIN_DURATION) {
+            fcToast('Move the playhead inside the selected clip to trim it.');
+            return;
+        }
+
+        saveStateToHistory('Trim Clip');
+
+        const trimHead = (playhead - clip.startTime) < (clipEnd - playhead);
+        // A linked audio clip has to move with its video, or the two drift apart.
+        const linked = clip.linkedClipId ? findClipById(clip.linkedClipId) : null;
+        const apply = (c) => {
+            if (!c) return;
+            if (trimHead) {
+                const delta = playhead - c.startTime;
+                c.trimStart = (c.trimStart || 0) + delta;
+                c.startTime = playhead;
+                c.duration = Math.max(MIN_DURATION, c.duration - delta);
+            } else {
+                c.duration = Math.max(MIN_DURATION, playhead - c.startTime);
+            }
+        };
+        apply(clip);
+        apply(linked);
+
+        renderTimeline();
+        updateInspector();
+        renderCanvasComposition();
+        syncMediaPlayback();
+        fcToast(`Trimmed clip ${trimHead ? 'start' : 'end'} to the playhead.`);
     };
 
     window.timelineRippleDelete = function () {

@@ -47,7 +47,48 @@ function matchMagic(header, patterns) {
     return false;
 }
 
+/** ASCII tag at a fixed offset, used to read container brands. */
+function readTag(header, start, len) {
+    let s = '';
+    for (let i = start; i < start + len && i < header.length; i++) {
+        s += String.fromCharCode(header[i]);
+    }
+    return s;
+}
+
+/**
+ * Containers that share a magic number have to be told apart by the bytes
+ * that follow it. Without this the first entry in MAGIC_BYTES wins: RIFF
+ * matched video/avi, so every .wav and .webp was reported as an AVI video,
+ * and every ftyp file was reported as mp4 video including .m4a audio.
+ */
+function detectContainerBrand(header) {
+    if (matchMagic(header, [[0x52, 0x49, 0x46, 0x46]])) { // "RIFF"
+        const form = readTag(header, 8, 4);
+        if (form === 'WAVE') return { category: 'audio', format: 'wav', valid: true };
+        if (form === 'WEBP') return { category: 'image', format: 'webp', valid: true };
+        if (form === 'AVI ') return { category: 'video', format: 'avi', valid: true };
+        return null;
+    }
+    if (matchMagic(header, [[0x00, 0x00, 0x00, null, 0x66, 0x74, 0x79, 0x70]])) { // "ftyp"
+        const brand = readTag(header, 8, 4);
+        if (brand === 'qt  ') return { category: 'video', format: 'mov', valid: true };
+        // M4A/M4B are audio-only MP4s; M4V and everything else carry video.
+        if (brand === 'M4A ' || brand === 'M4B ') return { category: 'audio', format: 'm4a', valid: true };
+        return { category: 'video', format: 'mp4', valid: true };
+    }
+    if (matchMagic(header, [[0x1A, 0x45, 0xDF, 0xA3]])) { // EBML: Matroska or WebM
+        // DocType sits past the 16-byte magic window, so scan what we have.
+        const head = readTag(header, 0, Math.min(header.length, 512));
+        return { category: 'video', format: head.indexOf('webm') !== -1 ? 'webm' : 'mkv', valid: true };
+    }
+    return null;
+}
+
 function detectFileType(header, extension, mimeType) {
+    // Disambiguate shared magic numbers before the generic table lookup.
+    const brand = detectContainerBrand(header);
+    if (brand) return brand;
     // Try magic bytes first
     for (const [category, formats] of Object.entries(MAGIC_BYTES)) {
         for (const [fmt, patterns] of Object.entries(formats)) {
@@ -82,20 +123,30 @@ function getExtension(filename) {
     return parts.length > 1 ? parts.pop() : '';
 }
 
-// Extract EXIF orientation from JPEG
+// Extract EXIF orientation from JPEG.
+//
+// Every read is bounds-checked. A DataView read past the end throws, and the
+// worker treats that as "metadata extraction failed" for the whole file — so a
+// truncated or tiny JPEG used to lose its format detection over an optional
+// orientation tag.
 function extractExifOrientation(arrayBuffer) {
     const view = new DataView(arrayBuffer);
+    if (view.byteLength < 4) return 1;
     if (view.getUint16(0) !== 0xFFD8) return 1; // Not JPEG
     let offset = 2;
-    while (offset < view.byteLength - 2) {
+    while (offset + 4 <= view.byteLength) {
         const marker = view.getUint16(offset);
+        const segmentSize = view.getUint16(offset + 2);
         if (marker === 0xFFE1) { // APP1 marker (EXIF)
             const exifOffset = offset + 4;
             // Check "Exif\0\0"
+            if (exifOffset + 6 > view.byteLength) return 1;
             if (view.getUint32(exifOffset) === 0x45786966 && view.getUint16(exifOffset + 4) === 0x0000) {
                 const tiffOffset = exifOffset + 6;
+                if (tiffOffset + 8 > view.byteLength) return 1;
                 const isLittleEndian = view.getUint16(tiffOffset) === 0x4949;
                 const ifdOffset = tiffOffset + view.getUint32(tiffOffset + 4, isLittleEndian);
+                if (ifdOffset + 2 > view.byteLength) return 1;
                 const numEntries = view.getUint16(ifdOffset, isLittleEndian);
                 for (let i = 0; i < numEntries; i++) {
                     const entryOffset = ifdOffset + 2 + i * 12;
@@ -108,7 +159,10 @@ function extractExifOrientation(arrayBuffer) {
             }
             return 1;
         }
-        offset += 2 + view.getUint16(offset + 2);
+        // A zero or garbage segment length would otherwise crawl the offset
+        // forward two bytes at a time across the whole header window.
+        if (segmentSize < 2) break;
+        offset += 2 + segmentSize;
     }
     return 1;
 }
@@ -148,7 +202,9 @@ self.onmessage = function(e) {
     }
 
     try {
-        const header = new Uint8Array(arrayBuffer.slice(0, 16));
+        // 512 bytes: 16 for magic numbers, the rest so the EBML DocType
+        // (which decides mkv vs webm) is inside the window.
+        const header = new Uint8Array(arrayBuffer.slice(0, 512));
         const extension = getExtension(file.name);
         const typeInfo = detectFileType(header, extension, file.type);
         const orientation = typeInfo.category === 'image' ? extractExifOrientation(arrayBuffer) : 1;
