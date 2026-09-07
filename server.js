@@ -8,11 +8,40 @@ const PUBLIC_DIR = path.join(__dirname, 'public');
 
 // Required security headers for FFmpeg.wasm to use the browser's local memory.
 // These also gate SharedArrayBuffer, so crossOriginIsolated must stay true.
+app.disable('x-powered-by');
+
 app.use((req, res, next) => {
     res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
     res.setHeader("Cross-Origin-Embedder-Policy", "require-corp");
+    // Baseline hardening for a public deployment. No CSP here: the app relies
+    // on inline handlers and inline styles throughout, so a meaningful policy
+    // would need those removed first rather than a permissive one that only
+    // looks like protection.
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+    res.setHeader('Referrer-Policy', 'no-referrer');
     next();
 });
+
+// Reject anything but safe read methods before it reaches the static handlers.
+app.use((req, res, next) => {
+    if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') return next();
+    res.status(405).set('Allow', 'GET, HEAD, OPTIONS').type('text/plain').send('Method Not Allowed');
+});
+
+// A malformed percent-escape (e.g. /%E0%A4%A) makes express.static throw a
+// URIError while decoding, which would otherwise surface as a 500.
+app.use((req, res, next) => {
+    try {
+        decodeURIComponent(req.path);
+    } catch (e) {
+        return res.status(400).type('text/plain').send('Bad Request');
+    }
+    next();
+});
+
+// Cheap liveness probe that does not touch the filesystem.
+app.get('/healthz', (req, res) => res.type('text/plain').send('ok'));
 
 // The editor ships ~1.1 MB of uncompressed JS/CSS (editor.js alone is 240 KB).
 // gzip cuts that by roughly 4x and costs one line.
@@ -36,7 +65,10 @@ for (const [mountPath, pkgPath] of VENDOR) {
         // Version-pinned by package.json and never edited in place, so unlike
         // the app's own assets these are safe to cache hard.
         immutable: true,
-        maxAge: '30d'
+        maxAge: '30d',
+        dotfiles: 'ignore',
+        fallthrough: true,
+        index: false
     }));
 }
 
@@ -47,10 +79,34 @@ app.use(express.static(PUBLIC_DIR, {
     etag: true,
     lastModified: true,
     maxAge: 0,
+    // Never serve dotfiles, so a stray .env or .git in public/ cannot leak.
+    dotfiles: 'ignore',
     setHeaders(res) {
         res.setHeader('Cache-Control', 'no-cache, must-revalidate');
     }
 }));
+
+app.use((req, res) => {
+    res.status(404).type('text/plain').send('Not Found');
+});
+
+// Final error handler. Without it Express prints stack traces into the
+// response in some configurations; here the detail stays in the log.
+app.use((err, req, res, next) => {
+    console.error('[ForgeCut] request failed:', req.method, req.originalUrl, err && err.message);
+    if (res.headersSent) return next(err);
+    const status = err && err.status && err.status >= 400 && err.status < 600 ? err.status : 500;
+    res.status(status).type('text/plain').send(status === 404 ? 'Not Found' : 'Internal Server Error');
+});
+
+// A single bad request must not take the process down and log everyone out of
+// their in-progress edit. Log loudly and keep serving.
+process.on('uncaughtException', (err) => {
+    console.error('[ForgeCut] uncaught exception:', err);
+});
+process.on('unhandledRejection', (reason) => {
+    console.error('[ForgeCut] unhandled rejection:', reason);
+});
 
 const server = app.listen(PORT, () => {
     console.log(`ForgeCut running at http://localhost:${PORT}`);

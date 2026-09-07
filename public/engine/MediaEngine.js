@@ -6,6 +6,8 @@
     'use strict';
 
     const mediaLibrary = new Map();
+    // Enough for magic-number detection plus an EXIF block on images.
+    const HEADER_BYTES = 64 * 1024;
     let worker = null;
     let pendingImports = new Map();
     let audioCtxForDecode = null;
@@ -21,17 +23,44 @@
         }
     }
 
+    /** The worker is terminated on clearAll(), so recreate it on demand. */
+    function ensureWorker() {
+        if (!worker) initWorker();
+        return worker;
+    }
+
     function handleWorkerMessage(e) {
-        const { id, success, metadata, error } = e.data;
+        const { id, success, metadata, waveform, error } = e.data;
         const pending = pendingImports.get(id);
         if (!pending) return;
         pendingImports.delete(id);
 
         if (success) {
-            pending.resolve(metadata);
+            pending.resolve(waveform !== undefined ? waveform : metadata);
         } else {
             pending.reject(new Error(error));
         }
+    }
+
+    /**
+     * Reduce decoded PCM to `numSamples` peaks in the worker.
+     *
+     * The channel data is transferred, not copied, so this hands the buffer off
+     * rather than duplicating it. Doing the reduction inline blocked the main
+     * thread for the length of the loop — millions of samples for a few minutes
+     * of audio — which is what made importing audio freeze the editor.
+     */
+    function downsampleInWorker(channelData, numSamples) {
+        const w = ensureWorker();
+        if (!w) return null;
+        return new Promise((resolve, reject) => {
+            const id = generateAssetId();
+            pendingImports.set(id, { resolve, reject });
+            w.postMessage(
+                { id, op: 'downsample', samples: channelData, numSamples },
+                [channelData.buffer]
+            );
+        });
     }
 
     function generateAssetId() {
@@ -43,7 +72,7 @@
             const id = generateAssetId();
             const reader = new FileReader();
             reader.onload = () => {
-                if (worker) {
+                if (ensureWorker()) {
                     pendingImports.set(id, { resolve, reject });
                     worker.postMessage(
                         { id, file: { name: file.name, size: file.size, type: file.type, lastModified: file.lastModified }, arrayBuffer: reader.result },
@@ -64,7 +93,11 @@
                 }
             };
             reader.onerror = () => reject(new Error('Failed to read file'));
-            reader.readAsArrayBuffer(file);
+            // Only the head of the file is needed: 16 bytes of magic numbers for
+            // format detection, and the EXIF block for images. Reading the whole
+            // file allocated the entire asset in the JS heap on every import —
+            // a 2GB video meant a 2GB ArrayBuffer to inspect 16 bytes.
+            reader.readAsArrayBuffer(file.slice(0, HEADER_BYTES));
         });
     }
 
@@ -125,6 +158,23 @@
         });
     }
 
+    /** Peak reduction. Kept on the main thread only as a worker fallback. */
+    function downsampleSamples(channelData, numSamples) {
+        const blockSize = Math.floor(channelData.length / numSamples) || 1;
+        const waveform = new Float32Array(numSamples);
+        for (let i = 0; i < numSamples; i++) {
+            let sum = 0;
+            const start = i * blockSize;
+            const end = Math.min(start + blockSize, channelData.length);
+            for (let j = start; j < end; j++) sum += Math.abs(channelData[j]);
+            waveform[i] = sum / blockSize;
+        }
+        let max = 0;
+        for (let i = 0; i < waveform.length; i++) if (waveform[i] > max) max = waveform[i];
+        if (max > 0) for (let i = 0; i < waveform.length; i++) waveform[i] /= max;
+        return waveform;
+    }
+
     async function generateWaveform(file, numSamples) {
         numSamples = numSamples || 800;
         if (!audioCtxForDecode) {
@@ -135,29 +185,19 @@
             reader.onload = async () => {
                 try {
                     const audioBuffer = await audioCtxForDecode.decodeAudioData(reader.result);
-                    const channelData = audioBuffer.getChannelData(0);
-                    const blockSize = Math.floor(channelData.length / numSamples);
-                    const waveform = new Float32Array(numSamples);
-                    for (let i = 0; i < numSamples; i++) {
-                        let sum = 0;
-                        const start = i * blockSize;
-                        const end = Math.min(start + blockSize, channelData.length);
-                        for (let j = start; j < end; j++) {
-                            sum += Math.abs(channelData[j]);
-                        }
-                        waveform[i] = sum / blockSize;
+                    // Copy the channel out so the AudioBuffer (which holds full
+                    // PCM for every channel) can be collected immediately, and
+                    // so we own a buffer that is safe to transfer.
+                    const channelData = new Float32Array(audioBuffer.getChannelData(0));
+
+                    const viaWorker = downsampleInWorker(channelData, numSamples);
+                    if (viaWorker) {
+                        resolve(await viaWorker);
+                        return;
                     }
-                    // Normalize
-                    let max = 0;
-                    for (let i = 0; i < waveform.length; i++) {
-                        if (waveform[i] > max) max = waveform[i];
-                    }
-                    if (max > 0) {
-                        for (let i = 0; i < waveform.length; i++) {
-                            waveform[i] /= max;
-                        }
-                    }
-                    resolve(waveform);
+
+                    // Main-thread fallback when no worker is available.
+                    resolve(downsampleSamples(channelData, numSamples));
                 } catch (e) {
                     resolve(null);
                 }
@@ -320,8 +360,32 @@
     function clearAll() {
         mediaLibrary.forEach(asset => {
             if (asset.objectUrl) URL.revokeObjectURL(asset.objectUrl);
+            // Detach media elements too, or the browser keeps the decoded
+            // buffers alive for as long as the element is reachable.
+            if (asset.element) {
+                if (asset.element.pause) asset.element.pause();
+                asset.element.removeAttribute('src');
+                if (asset.element.load) asset.element.load();
+            }
         });
         mediaLibrary.clear();
+
+        // Reject anything still in flight so its promise cannot leak.
+        pendingImports.forEach(p => p.reject(new Error('Media library cleared')));
+        pendingImports.clear();
+
+        // The worker and the decode context are recreated lazily on next use;
+        // holding them across a project reset kept a thread and an audio
+        // device handle alive for the rest of the session.
+        if (worker) {
+            worker.terminate();
+            worker = null;
+        }
+        if (audioCtxForDecode) {
+            const ctx = audioCtxForDecode;
+            audioCtxForDecode = null;
+            if (ctx.state !== 'closed') ctx.close().catch(() => {});
+        }
     }
 
     // Initialize worker on load

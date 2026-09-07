@@ -113,8 +113,40 @@ function extractExifOrientation(arrayBuffer) {
     return 1;
 }
 
+/**
+ * Reduce decoded PCM to `numSamples` normalised peaks.
+ * Runs here so a multi-minute audio import does not block the UI thread.
+ */
+function downsample(samples, numSamples) {
+    const blockSize = Math.floor(samples.length / numSamples) || 1;
+    const waveform = new Float32Array(numSamples);
+    for (let i = 0; i < numSamples; i++) {
+        let sum = 0;
+        const start = i * blockSize;
+        const end = Math.min(start + blockSize, samples.length);
+        for (let j = start; j < end; j++) sum += Math.abs(samples[j]);
+        waveform[i] = sum / blockSize;
+    }
+    let max = 0;
+    for (let i = 0; i < waveform.length; i++) if (waveform[i] > max) max = waveform[i];
+    if (max > 0) for (let i = 0; i < waveform.length; i++) waveform[i] /= max;
+    return waveform;
+}
+
 self.onmessage = function(e) {
-    const { id, file, arrayBuffer } = e.data;
+    const { id, file, arrayBuffer, op } = e.data;
+
+    if (op === 'downsample') {
+        try {
+            const wf = downsample(e.data.samples, e.data.numSamples || 800);
+            // Transfer the result back rather than copying it.
+            self.postMessage({ id, success: true, waveform: wf }, [wf.buffer]);
+        } catch (err) {
+            self.postMessage({ id, success: false, error: err.message });
+        }
+        return;
+    }
+
     try {
         const header = new Uint8Array(arrayBuffer.slice(0, 16));
         const extension = getExtension(file.name);
