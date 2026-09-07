@@ -16,17 +16,12 @@
         renderCanvasComposition();
     };
 
-    window.openProject = function () {
-        fcToast('Opening local project templates...');
-    };
-
-    window.saveProject = function () {
-        fcToast('Project saved successfully!');
-    };
-
-    window.saveProjectAs = function () {
-        fcToast('Project template duplicated!');
-    };
+    // openProject / saveProject / saveProjectAs used to be defined here as
+    // toast-only mocks. Nothing called them, and editor-lifecycle.js — which
+    // loads later — defines the real saveProject (it serialises the project)
+    // and aliases saveProjectAs to it. The mocks only survived by losing the
+    // load-order race; reordering the scripts would have swapped real project
+    // saving for a toast that claims success. Removed.
 
     window.addNewTrack = function (type) {
         const trackId = `${type}Track_${Date.now()}`;

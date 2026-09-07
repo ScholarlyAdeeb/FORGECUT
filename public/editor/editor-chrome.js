@@ -168,9 +168,9 @@ window.openProjectSettings = function () {
     const btn = document.querySelector('[data-backstage-tab="settings"]');
     if (btn) btn.click();
 };
-window.minimizeApp = function () { fcToast('Application minimized'); };
-window.maximizeApp = function () { fcToast('Application maximized'); };
-window.closeApp = function () { fcToast('Application closed'); };
+// minimizeApp / maximizeApp / closeApp were toasts simulating native window
+// chrome. ForgeCut runs in a browser tab, has no such controls, and nothing
+// called them. Removed.
 
 // Timeline zoom adjust
 window.adjustZoom = function (amount) {

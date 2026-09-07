@@ -700,46 +700,14 @@ function updateInspector() {
             renderCanvasComposition();
         });
     }
-    const shapePatternColorEl = document.getElementById('insp_shape_pattern_color');
-    if (shapePatternColorEl) {
-        shapePatternColorEl.addEventListener('input', (e) => {
-            if (!clip.shapeProps) clip.shapeProps = {};
-            clip.shapeProps.patternColor = e.target.value;
-            renderCanvasComposition();
-        });
-    }
-    const shapeFillImageTextEl = document.getElementById('insp_shape_fill_image');
-    if (shapeFillImageTextEl) {
-        shapeFillImageTextEl.addEventListener('input', (e) => {
-            if (!clip.shapeProps) clip.shapeProps = {};
-            clip.shapeProps.fillImage = e.target.value;
-            clip.shapeProps.fillImageElement = null;
-            renderCanvasComposition();
-        });
-    }
-    const shapeGlowColorEl = document.getElementById('insp_shape_glow_color');
-    if (shapeGlowColorEl) {
-        shapeGlowColorEl.addEventListener('input', (e) => {
-            if (!clip.shapeProps) clip.shapeProps = {};
-            if (!clip.shapeProps.glow) clip.shapeProps.glow = { color: '#ff00ff', size: 0 };
-            clip.shapeProps.glow.color = e.target.value;
-            renderCanvasComposition();
-        });
-    }
-    const shapeGlowSizeEl = document.getElementById('insp_shape_glow_size');
-    if (shapeGlowSizeEl) {
-        shapeGlowSizeEl.addEventListener('input', (e) => {
-            if (!clip.shapeProps) clip.shapeProps = {};
-            if (!clip.shapeProps.glow) clip.shapeProps.glow = { color: '#ff00ff', size: 0 };
-            clip.shapeProps.glow.size = parseInt(e.target.value);
-            renderCanvasComposition();
-            const label = shapeGlowSizeEl.previousElementSibling;
-            if (label) {
-                const span = label.querySelector('span:last-child');
-                if (span) span.textContent = `${e.target.value}px`;
-            }
-        });
-    }
+    // Listeners for insp_shape_pattern_color, insp_shape_fill_image,
+    // insp_shape_glow_color and insp_shape_glow_size lived here. The inspector
+    // never renders those four inputs — unlike insp_shape_width/height/fill and
+    // the rest, no markup anywhere assigns those ids — so every one of these
+    // getElementById calls returned null on every inspector refresh. The
+    // clip.shapeProps.patternColor / fillImage / glow fields they wrote are
+    // still read by ShapeRenderer, so the controls can be reinstated by adding
+    // the inputs; the dead wiring is removed.
 
     const textEl = document.getElementById('insp_text');
     if (textEl) {
