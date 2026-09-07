@@ -137,7 +137,7 @@ window.welcomeOpenProject = function(event) {
                 addRecentProject(file.name, data);
             }
         } catch (e) {
-            alert('Failed to parse project file.');
+            fcToast('Failed to parse project file.');
         }
     };
     reader.readAsText(file);
@@ -761,7 +761,7 @@ function submitBugReport(event) {
     const screenshot = document.getElementById('bugScreenshot').files[0];
     
     // Standard visual feedback notification / alert
-    alert(`Bug Report Submitted Successfully!\nTitle: ${title}\nDescription: ${description.substring(0, 50)}...\nScreenshot: ${screenshot ? screenshot.name : 'None'}`);
+    fcToast(`Bug Report Submitted Successfully!\nTitle: ${title}\nDescription: ${description.substring(0, 50)}...\nScreenshot: ${screenshot ? screenshot.name : 'None'}`);
     closeHelpDialog();
 }
 

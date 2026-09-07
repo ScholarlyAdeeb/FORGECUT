@@ -426,7 +426,7 @@
         });
 
         if (selectedIndices.length === 0) {
-            alert('Please select at least one variation to export.');
+            fcToast('Please select at least one variation to export.');
             return;
         }
 

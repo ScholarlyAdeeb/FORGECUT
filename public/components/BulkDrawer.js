@@ -292,12 +292,12 @@ window.updateDashboardStats = function() {
 // Queue control execution loops
 window.startBatchGenerate = function(all = false) {
     if (!state.batchJobs || state.batchJobs.length === 0) {
-        alert('Please load a CSV configuration file before generating.');
+        fcToast('Please load a CSV configuration file before generating.');
         return;
     }
 
     if (window.batchQueueState.isRunning) {
-        alert('Batch queue is already running.');
+        fcToast('Batch queue is already running.');
         return;
     }
 
@@ -314,7 +314,7 @@ window.startBatchGenerate = function(all = false) {
     });
 
     if (window.batchQueueState.activeJobs.length === 0) {
-        alert('No variations selected to generate.');
+        fcToast('No variations selected to generate.');
         window.batchQueueState.isRunning = false;
         return;
     }
@@ -341,7 +341,7 @@ window.processNextBatchJob = function() {
         // Queue finished!
         window.batchQueueState.isRunning = false;
         window.updateBulkDrawerList();
-        alert('Batch output rendering queue finished successfully!');
+        fcToast('Batch output rendering queue finished successfully!');
         return;
     }
 
@@ -396,7 +396,7 @@ window.pauseBatchQueue = function() {
             currentJob.status = 'Pending';
         }
         window.updateBulkDrawerList();
-        alert('Queue paused.');
+        fcToast('Queue paused.');
     }
 };
 
@@ -405,7 +405,7 @@ window.resumeBatchQueue = function() {
         window.batchQueueState.isPaused = false;
         window.updateBulkDrawerList();
         window.processNextBatchJob();
-        alert('Queue resumed.');
+        fcToast('Queue resumed.');
     }
 };
 
@@ -422,7 +422,7 @@ window.cancelBatchQueue = function() {
             }
         });
         window.updateBulkDrawerList();
-        alert('Queue cancelled.');
+        fcToast('Queue cancelled.');
     }
 };
 
@@ -441,19 +441,19 @@ window.retryFailedBatch = function() {
 window.exportSelectedBatch = function() {
     const selected = state.batchJobs ? state.batchJobs.filter(j => j.selected && j.status === 'Completed') : [];
     if (selected.length === 0) {
-        alert('No completed variations selected for export.');
+        fcToast('No completed variations selected for export.');
         return;
     }
-    alert(`Exporting ${selected.length} selected completed variations...`);
+    fcToast(`Exporting ${selected.length} selected completed variations...`);
 };
 
 window.exportAllBatch = function() {
     const completed = state.batchJobs ? state.batchJobs.filter(j => j.status === 'Completed') : [];
     if (completed.length === 0) {
-        alert('No completed variations to export. Please run render queue first.');
+        fcToast('No completed variations to export. Please run render queue first.');
         return;
     }
-    alert(`Packaging all ${completed.length} completed variations into ZIP archive download...`);
+    fcToast(`Packaging all ${completed.length} completed variations into ZIP archive download...`);
 };
 
 window.clearCompletedBatch = function() {
@@ -466,7 +466,7 @@ window.clearCompletedBatch = function() {
         }
     });
     window.updateBulkDrawerList();
-    alert('Cleared completed status from variations.');
+    fcToast('Cleared completed status from variations.');
 };
 
 // Activity simulation

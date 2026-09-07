@@ -16,8 +16,8 @@ class ForgeCutTimeline extends HTMLElement {
         </div>
         <div class="flex items-center gap-4">
             <button class="material-symbols-outlined text-primary hover:text-on-surface cursor-pointer text-lg bg-transparent border-none" onclick="toggleSnapping()" id="snapBtn" title="Toggle Snapping">straighten</button>
-            <button class="material-symbols-outlined text-on-surface-variant hover:text-on-surface cursor-pointer text-lg bg-transparent border-none" onclick="alert('Magnet mode toggle')" id="magnetBtn">circle</button>
-            <button class="material-symbols-outlined text-on-surface-variant hover:text-on-surface cursor-pointer text-lg bg-transparent border-none" onclick="alert('Zoom slider focused')">zoom_in</button>
+            <button class="material-symbols-outlined text-on-surface-variant hover:text-on-surface cursor-pointer text-lg bg-transparent border-none" onclick="fcToast('Magnet mode toggle')" id="magnetBtn">circle</button>
+            <button class="material-symbols-outlined text-on-surface-variant hover:text-on-surface cursor-pointer text-lg bg-transparent border-none" onclick="fcToast('Zoom slider focused')">zoom_in</button>
         </div>
     </div>
     
