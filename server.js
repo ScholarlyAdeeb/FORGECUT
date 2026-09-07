@@ -18,6 +18,28 @@ app.use((req, res, next) => {
 // gzip cuts that by roughly 4x and costs one line.
 app.use(compression());
 
+// FFmpeg.wasm, served from node_modules instead of unpkg so exports work
+// offline and are not exposed to a third-party CDN being down or changing.
+// Not copied into public/ because ffmpeg-core.wasm alone is ~32 MB; npm owns
+// the version pin via package.json.
+//
+// The paths matter: @ffmpeg/ffmpeg resolves its worker with
+// `new Worker(new URL("./worker.js", import.meta.url))`, so index.js and
+// worker.js have to be served from the same directory.
+const VENDOR = [
+    ['/vendor/ffmpeg', '@ffmpeg/ffmpeg/dist/esm'],
+    ['/vendor/ffmpeg-util', '@ffmpeg/util/dist/esm'],
+    ['/vendor/ffmpeg-core', '@ffmpeg/core/dist/esm']
+];
+for (const [mountPath, pkgPath] of VENDOR) {
+    app.use(mountPath, express.static(path.join(__dirname, 'node_modules', pkgPath), {
+        // Version-pinned by package.json and never edited in place, so unlike
+        // the app's own assets these are safe to cache hard.
+        immutable: true,
+        maxAge: '30d'
+    }));
+}
+
 app.use(express.static(PUBLIC_DIR, {
     // Assets are not content-hashed, so they must revalidate on every load or a
     // deploy would serve stale code. ETag keeps that cheap (304, no body).

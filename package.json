@@ -12,6 +12,9 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "@ffmpeg/core": "0.12.6",
+    "@ffmpeg/ffmpeg": "0.12.10",
+    "@ffmpeg/util": "0.12.1",
     "compression": "^1.8.1",
     "express": "^5.2.1"
   }

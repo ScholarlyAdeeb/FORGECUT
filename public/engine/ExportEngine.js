@@ -41,9 +41,11 @@
 
         _ffmpegLoading = true;
         try {
-            // Dynamic import from CDN
-            const { FFmpeg } = await import('https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/esm/index.js');
-            const { fetchFile, toBlobURL } = await import('https://unpkg.com/@ffmpeg/util@0.12.1/dist/esm/index.js');
+            // Served locally by server.js from node_modules — see the VENDOR
+            // mounts there. Previously loaded from unpkg, which meant no export
+            // offline and a hard runtime dependency on a third-party CDN.
+            const { FFmpeg } = await import('/vendor/ffmpeg/index.js');
+            const { fetchFile, toBlobURL } = await import('/vendor/ffmpeg-util/index.js');
 
             _ffmpeg = new FFmpeg();
             _ffmpeg.on('log', ({ message }) => {
@@ -56,7 +58,7 @@
                 }
             });
 
-            const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm';
+            const baseURL = '/vendor/ffmpeg-core';
             await _ffmpeg.load({
                 coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
                 wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
