@@ -368,9 +368,9 @@
                         <div class="w-2 h-2 rounded-full bg-[#4CAF50]"></div>
                         <span class="font-status-bar text-status-bar text-on-surface-variant">System Ready</span>
                     </div>
-                    <span class="font-status-bar text-status-bar text-on-surface-variant">Project: <span class="font-medium text-on-surface" id="footerProjectName" title="Double-click to rename">Untitled Project</span></span>
-                    <span class="font-status-bar text-status-bar text-on-surface-variant">Resolution: <span class="font-medium text-on-surface" id="footerResolution">1080x1920</span></span>
-                    <span class="font-status-bar text-status-bar text-on-surface-variant">FPS: <span class="font-medium text-on-surface" id="footerFps">30</span></span>
+                    <span class="fc-status-detail font-status-bar text-status-bar text-on-surface-variant">Project: <span class="font-medium text-on-surface" id="footerProjectName" title="Double-click to rename">Untitled Project</span></span>
+                    <span class="fc-status-detail font-status-bar text-status-bar text-on-surface-variant">Resolution: <span class="font-medium text-on-surface" id="footerResolution">1080x1920</span></span>
+                    <span class="fc-status-detail font-status-bar text-status-bar text-on-surface-variant">FPS: <span class="font-medium text-on-surface" id="footerFps">30</span></span>
                 </div>
                 <div class="flex items-center gap-4">
                     <span class="font-status-bar text-status-bar text-on-surface-variant select-none" id="footerZoomLabel">20%</span>
@@ -386,6 +386,16 @@
             
             <!-- Bulk Production Bottom Drawer Panel -->
             <forgecut-bulk-drawer></forgecut-bulk-drawer>
+
+            <!-- Phone layout: the side panels become drawers, so they need a
+                 scrim and a way to open them. Hidden above 768px by CSS. -->
+            <div id="fcPanelScrim" onclick="window.closeMobilePanels()"></div>
+            <button class="fc-panel-toggle fc-toggle-left" onclick="window.toggleMobilePanel('left')" title="Media &amp; project panel" aria-label="Toggle media panel">
+                <span class="material-symbols-outlined">video_library</span>
+            </button>
+            <button class="fc-panel-toggle fc-toggle-right" onclick="window.toggleMobilePanel('right')" title="Inspector panel" aria-label="Toggle inspector panel">
+                <span class="material-symbols-outlined">tune</span>
+            </button>
 
         </div><!-- /fc-editor-behind -->
     </div><!-- /fc-editor-shell -->
@@ -407,6 +417,7 @@
     <script src="engine/ExportEngine.js"></script>
     <script src="engine/HistoryManager.js"></script>
     <script src="engine/KeyboardShortcuts.js"></script>
+    <script src="engine/RibbonScaler.js"></script>
 
     <!-- Main Logic Scripts -->
     <script src="ui.js"></script>

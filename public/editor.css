@@ -946,3 +946,261 @@ footer .font-medium { color: var(--on-surface); }
     opacity: 1;
     color: var(--primary);
 }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   RIBBON SCALING, DISPLAY MODES AND PHONE LAYOUT
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.fc-app-header { position: relative; }
+
+/* Only the groups scroll; Preview/Export and the display chevron stay put. */
+.fc-ribbon-row { min-width: 0; }
+.fc-ribbon-scroll {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: thin;
+}
+.fc-ribbon-scroll::-webkit-scrollbar { height: 4px; }
+.fc-ribbon-scroll::-webkit-scrollbar-thumb {
+    background: var(--outline-variant);
+    border-radius: 2px;
+}
+
+/* A group collapsed to a single dropdown chip. */
+.fc-ribbon-group.fc-collapsed { justify-content: center; }
+.fc-ribbon-collapsed {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1px;
+    min-width: 62px;
+    height: 100%;
+    padding: 4px 8px;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--on-surface);
+    cursor: pointer;
+    transition: background-color .15s ease;
+}
+.fc-ribbon-collapsed:hover { background: var(--ribbon-hover, rgba(0, 95, 170, .08)); }
+html.dark .fc-ribbon-collapsed:hover { background: rgba(255, 255, 255, .08); }
+.fc-ribbon-collapsed .fc-collapsed-icon { font-size: 22px; color: var(--on-surface-variant); }
+.fc-ribbon-collapsed .fc-collapsed-label {
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 1.1;
+    max-width: 74px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.fc-ribbon-collapsed .fc-collapsed-chevron { font-size: 14px; color: var(--on-surface-variant); margin-top: -2px; }
+
+/* Parking bay for a collapsed group's real content. Never rendered — the
+   nodes are moved, not cloned, so ids and inline handlers stay valid. */
+.fc-ribbon-parked { display: none; }
+
+.fc-ribbon-popover {
+    position: fixed;
+    z-index: 100003;
+    display: flex;
+    align-items: stretch;
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--outline-variant);
+    background: var(--surface-container-low, var(--surface));
+    box-shadow: 0 12px 34px rgba(0, 0, 0, .28);
+    max-width: calc(100vw - 16px);
+    overflow-x: auto;
+}
+
+/* Ribbon Display Options chevron */
+.fc-ribbon-display-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    align-self: center;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--on-surface-variant);
+    cursor: pointer;
+    transition: background-color .15s ease, color .15s ease;
+}
+.fc-ribbon-display-btn:hover { background: var(--surface-container-highest); color: var(--on-surface); }
+.fc-ribbon-display-btn .material-symbols-outlined { font-size: 20px; }
+
+.fc-ribbon-menu {
+    position: fixed;
+    z-index: 100004;
+    min-width: 232px;
+    padding: 8px 0;
+    border-radius: 8px;
+    border: 1px solid var(--outline-variant);
+    background: var(--surface-container-low, var(--surface));
+    box-shadow: 0 14px 40px rgba(0, 0, 0, .32);
+    font: 13px/1.4 system-ui, sans-serif;
+    color: var(--on-surface);
+}
+.fc-ribbon-menu-title {
+    padding: 4px 16px 8px;
+    font-size: 13px;
+    font-weight: 700;
+}
+.fc-ribbon-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 7px 16px;
+    border: none;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+.fc-ribbon-menu-item:hover { background: var(--surface-container-highest); }
+.fc-ribbon-menu-item.fc-menu-sep {
+    margin-top: 6px;
+    padding-top: 12px;
+    border-top: 1px solid var(--outline-variant);
+}
+.fc-ribbon-menu-item .fc-menu-check {
+    width: 18px;
+    font-size: 16px;
+    color: var(--primary);
+}
+
+/* ── Display modes ──────────────────────────────────────────────────── */
+
+/* Show tabs only: ribbon hidden until a tab peeks it open over the content. */
+html.fc-ribbon-tabs-only #fcRibbonRow { display: none; }
+html.fc-ribbon-tabs-only.fc-ribbon-peek #fcRibbonRow {
+    display: flex;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 60;
+    box-shadow: 0 12px 28px rgba(0, 0, 0, .28);
+}
+
+/* Full-screen mode: chrome away, canvas gets the room. */
+html.fc-ribbon-fullscreen .fc-app-header > div:first-child,
+html.fc-ribbon-fullscreen #fcRibbonTabs,
+html.fc-ribbon-fullscreen #fcRibbonRow { display: none; }
+
+html.fc-qat-hidden #fcQuickAccessToolbar { display: none; }
+
+/* ── Phone / tablet ─────────────────────────────────────────────────── */
+
+@media (max-width: 900px) {
+    .fc-ribbon-actions .fc-action-label { display: none; }
+    .fc-ribbon-actions .fc-ribbon-action { padding-left: 10px; padding-right: 10px; }
+}
+
+@media (max-width: 768px) {
+    /* Ribbon: shorter, all groups collapsed to scrollable chips.
+       Addressed by id: Tailwind's h-24 utility is also a single class, and
+       the play-CDN stylesheet is injected after this file, so a plain
+       .fc-ribbon-row rule loses the tie and the row stayed 96px tall. */
+    #fcRibbonRow { height: 62px; }
+    .fc-ribbon-tabs { height: 34px; overflow-x: auto; scrollbar-width: none; }
+    .fc-ribbon-tabs::-webkit-scrollbar { display: none; }
+    .fc-ribbon-tabs-strip { flex-wrap: nowrap; }
+    .fc-ribbon-tabs .ribbon-tab-btn,
+    .fc-ribbon-tabs nav button { padding-left: 12px; padding-right: 12px; white-space: nowrap; }
+    .fc-ribbon-collapsed { min-width: 54px; padding: 2px 6px; }
+    .fc-ribbon-collapsed .fc-collapsed-icon { font-size: 20px; }
+    .fc-ribbon-collapsed .fc-collapsed-label { max-width: 60px; font-size: 9px; }
+
+    /* The three-column desktop layout cannot work on a phone: stack the
+       preview over the timeline and turn the side panels into drawers. */
+    main { flex-direction: column; }
+    #left-resizer, #right-resizer { display: none; }
+
+    forgecut-sidebar,
+    forgecut-export-queue {
+        position: fixed;
+        top: 0;
+        bottom: 0;
+        z-index: 70;
+        width: min(86vw, 340px);
+        max-width: 86vw;
+        background: var(--surface);
+        box-shadow: 0 0 40px rgba(0, 0, 0, .4);
+        transition: transform .22s ease;
+        overflow-y: auto;
+    }
+    forgecut-sidebar { left: 0; transform: translateX(-100%); }
+    forgecut-export-queue { right: 0; transform: translateX(100%); }
+    html.fc-panel-left forgecut-sidebar { transform: translateX(0); }
+    html.fc-panel-right forgecut-export-queue { transform: translateX(0); }
+
+    main > section { width: 100%; min-height: 0; }
+
+    /* Touch targets: the ribbon is built from 24px icon buttons. */
+    .ribbon-button { min-width: 56px; padding: 8px 6px; }
+
+    /* Status bar drops the detail that will not fit, and stops wrapping into
+       the timeline above it. */
+    footer .fc-status-detail { display: none; }
+    footer { padding-left: 10px; padding-right: 10px; gap: 8px; }
+    footer > div { gap: 10px !important; min-width: 0; }
+    footer .w-32 { width: 88px !important; }
+
+    /* Toolbars that were laid out for a desktop width scroll instead of
+       spilling their controls off the edge. */
+    forgecut-preview .flex.items-center { flex-wrap: nowrap; }
+    forgecut-preview > div:first-child { overflow-x: auto; scrollbar-width: none; }
+    forgecut-preview > div:first-child::-webkit-scrollbar { display: none; }
+}
+
+@media (max-width: 480px) {
+    #fcRibbonRow { height: 58px; }
+    .fc-ribbon-collapsed .fc-collapsed-label { display: none; }
+    .fc-ribbon-collapsed { min-width: 44px; }
+}
+
+/* Panel scrim for the phone drawers. */
+#fcPanelScrim {
+    position: fixed;
+    inset: 0;
+    z-index: 65;
+    background: rgba(0, 0, 0, .45);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .2s ease;
+}
+html.fc-panel-left #fcPanelScrim,
+html.fc-panel-right #fcPanelScrim { opacity: 1; pointer-events: auto; }
+
+/* Floating panel toggles, phone only. */
+.fc-panel-toggle {
+    display: none;
+    position: fixed;
+    bottom: 46px;
+    z-index: 68;
+    width: 42px;
+    height: 42px;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    border-radius: 50%;
+    background: var(--primary);
+    color: #fff;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, .35);
+    cursor: pointer;
+}
+.fc-panel-toggle.fc-toggle-left { left: 12px; }
+.fc-panel-toggle.fc-toggle-right { right: 12px; }
+@media (max-width: 768px) {
+    .fc-panel-toggle { display: flex; }
+}

@@ -10,7 +10,7 @@ class ForgeCutHeader extends HTMLElement {
             <span class="font-panel-header text-panel-header font-bold text-on-surface">ForgeCut</span>
             <span class="text-xs px-2 py-0.5 bg-primary-container text-on-primary-container rounded font-bold" id="titleBarModeLabel">Professional NLE</span>
         </div>
-        <div class="flex items-center gap-4">
+        <div id="fcQuickAccessToolbar" class="flex items-center gap-4">
             <button class="material-symbols-outlined text-on-surface-variant hover:text-on-surface cursor-pointer text-lg bg-transparent border-none" onclick="window.toggleDarkTheme()" title="Toggle Dark Theme">dark_mode</button>
             <button class="material-symbols-outlined text-on-surface-variant hover:text-on-surface cursor-pointer text-lg bg-transparent border-none" onclick="openProjectSettings()" title="Settings">settings</button>
             <button class="material-symbols-outlined text-on-surface-variant hover:text-on-surface cursor-pointer text-lg bg-transparent border-none" onclick="openHelpCenter()" title="Help">help</button>
@@ -18,8 +18,8 @@ class ForgeCutHeader extends HTMLElement {
     </div>
     
     <!-- Ribbon Tabs -->
-    <nav class="flex items-center px-2 h-9 bg-surface">
-        <div class="flex items-center h-full">
+    <nav id="fcRibbonTabs" class="fc-ribbon-tabs flex items-center px-2 h-9 bg-surface">
+        <div class="fc-ribbon-tabs-strip flex items-center h-full">
             <button class="px-4 h-full font-ribbon-tab text-ribbon-tab text-on-surface-variant hover:bg-surface-container-high transition-colors bg-transparent border-none" onclick="openBackstage()">File</button>
             <button class="ribbon-tab-btn px-4 h-full font-ribbon-tab text-ribbon-tab text-primary border-b-2 border-primary font-bold bg-surface-container-low" data-tab="home">Home</button>
             <button class="ribbon-tab-btn px-4 h-full font-ribbon-tab text-ribbon-tab text-on-surface-variant hover:bg-surface-container-high transition-colors" data-tab="insert">Insert</button>
@@ -33,8 +33,10 @@ class ForgeCutHeader extends HTMLElement {
     </nav>
     
     <!-- Ribbon Content Groups -->
-    <div class="flex items-stretch bg-surface-container-low h-24 px-2 py-1 overflow-x-auto border-t border-outline-variant">
-        
+    <div id="fcRibbonRow" class="fc-ribbon-row flex items-stretch bg-surface-container-low h-24 px-2 py-1 border-t border-outline-variant">
+        <!-- Only the groups scroll; the actions on the right stay pinned. -->
+        <div id="fcRibbonScroll" class="fc-ribbon-scroll flex items-stretch">
+
         <!-- HOME TAB GROUPS -->
         <div id="ribbon-group-home" class="ribbon-group-container flex items-stretch">
             <!-- Group: History -->
@@ -655,15 +657,21 @@ class ForgeCutHeader extends HTMLElement {
             </div>
         </div>
         
+        </div><!-- /fcRibbonScroll -->
+
         <!-- Export/Preview Ribbon Buttons Fixed on Right -->
-        <div class="ml-auto flex items-center gap-3 pr-4 border-l border-outline-variant/30 pl-4">
-            <button class="flex items-center gap-2 px-4 py-2 hover:bg-surface-container-highest transition-colors rounded-lg text-on-surface bg-transparent border-none cursor-pointer" onclick="togglePlay()">
+        <div class="fc-ribbon-actions ml-auto flex items-center gap-3 pr-2 border-l border-outline-variant/30 pl-4">
+            <button class="fc-ribbon-action flex items-center gap-2 px-4 py-2 hover:bg-surface-container-highest transition-colors rounded-lg text-on-surface bg-transparent border-none cursor-pointer" onclick="togglePlay()">
                 <span class="material-symbols-outlined text-lg">play_circle</span>
-                <span class="font-medium text-xs">Preview</span>
+                <span class="fc-action-label font-medium text-xs">Preview</span>
             </button>
-            <button class="flex items-center gap-2 px-6 py-2 bg-primary text-white font-bold rounded-lg hover:shadow-lg transition-all active:scale-95 cursor-pointer border-none" onclick="startBulkExport()">
+            <button class="fc-ribbon-action flex items-center gap-2 px-6 py-2 bg-primary text-white font-bold rounded-lg hover:shadow-lg transition-all active:scale-95 cursor-pointer border-none" onclick="startBulkExport()">
                 <span class="material-symbols-outlined text-lg">upload</span>
-                <span class="text-xs">Export</span>
+                <span class="fc-action-label text-xs">Export</span>
+            </button>
+            <!-- Ribbon display options (Word's "Ribbon Display Options" chevron) -->
+            <button id="fcRibbonDisplayBtn" class="fc-ribbon-display-btn" title="Ribbon Display Options" aria-haspopup="menu" aria-expanded="false">
+                <span class="material-symbols-outlined">keyboard_arrow_down</span>
             </button>
         </div>
     </div>
