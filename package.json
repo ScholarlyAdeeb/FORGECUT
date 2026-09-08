@@ -6,7 +6,10 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
-    "check:boundaries": "node scripts/check-platform-boundaries.js"
+    "check:boundaries": "node scripts/check-platform-boundaries.js",
+    "test": "node --test test/unit/*.test.js",
+    "check": "npm run check:boundaries && npm run check:wiring && npm test",
+    "check:wiring": "node scripts/check-dom-wiring.js"
   },
   "keywords": [],
   "author": "",

@@ -495,22 +495,25 @@ window.positionObject = function (clipId, posType) {
     const left = clampX(hw), right = clampX(cw - hw), midX = cw / 2;
     const top = clampY(hh), bottom = clampY(ch - hh), midY = ch / 2;
 
-    // Snapshot before mutating: pushState clones the *current* state, so
-    // saving afterwards would make undo restore the already-moved position.
-    if (window.saveStateToHistory) window.saveStateToHistory('Position Object');
+    // withHistory snapshots before mutating. pushState clones the *current*
+    // state, so saving afterwards would make undo restore the already-moved
+    // position — see its definition in editor/editor-project.js.
+    const place = () => {
+        switch (posType) {
+            case 'center':      clip.x = midX;  clip.y = midY;   break;
+            case 'top-left':    clip.x = left;  clip.y = top;    break;
+            case 'top-center':  clip.x = midX;  clip.y = top;    break;
+            case 'top-right':   clip.x = right; clip.y = top;    break;
+            case 'mid-left':    clip.x = left;  clip.y = midY;   break;
+            case 'mid-right':   clip.x = right; clip.y = midY;   break;
+            case 'bot-left':    clip.x = left;  clip.y = bottom; break;
+            case 'bot-center':  clip.x = midX;  clip.y = bottom; break;
+            case 'bot-right':   clip.x = right; clip.y = bottom; break;
+        }
+    };
 
-    switch (posType) {
-        case 'center':      clip.x = midX;  clip.y = midY;   break;
-        case 'top-left':    clip.x = left;  clip.y = top;    break;
-        case 'top-center':  clip.x = midX;  clip.y = top;    break;
-        case 'top-right':   clip.x = right; clip.y = top;    break;
-        case 'mid-left':    clip.x = left;  clip.y = midY;   break;
-        case 'mid-right':   clip.x = right; clip.y = midY;   break;
-        case 'bot-left':    clip.x = left;  clip.y = bottom; break;
-        case 'bot-center':  clip.x = midX;  clip.y = bottom; break;
-        case 'bot-right':   clip.x = right; clip.y = bottom; break;
-        default: return;
-    }
+    if (window.withHistory) window.withHistory('Position Object', place);
+    else place();
 
     if (window.renderCanvasComposition) window.renderCanvasComposition();
     if (window.updateInspector) window.updateInspector();

@@ -376,10 +376,18 @@ class ForgeCutHeader extends HTMLElement {
                         <span class="material-symbols-outlined text-[24px] text-on-surface-variant">horizontal_distribute</span>
                         <span class="text-[10px] text-on-surface">Wipe</span>
                     </button>
-<!-- Morph removed: TransitionEngine.applyTransition has no case for it, so it
-                         fell through to the default branch and silently produced a hard cut.
-                         Verified by passing an invalid transition name, which rendered
-                         identically. Reinstate this button if a renderMorph is added. -->
+<!-- Morph was removed: TransitionEngine has no case for it, so it fell through
+                         to the default branch and silently produced a hard cut. Zoom and Dip To
+                         Black replace it - both were already fully implemented in the engine and
+                         simply had no button. -->
+                    <button class="flex flex-col items-center p-1 w-16 hover:bg-surface-container-high transition-colors rounded cursor-pointer animate-in fade-in" onclick="setTransition('Zoom')">
+                        <span class="material-symbols-outlined text-[24px] text-on-surface-variant">zoom_out_map</span>
+                        <span class="text-[10px] text-on-surface">Zoom</span>
+                    </button>
+                    <button class="flex flex-col items-center p-1 w-16 hover:bg-surface-container-high transition-colors rounded cursor-pointer animate-in fade-in" onclick="setTransition('Dip To Black')">
+                        <span class="material-symbols-outlined text-[24px] text-on-surface-variant">dark_mode</span>
+                        <span class="text-[10px] text-on-surface">Dip</span>
+                    </button>
                     <button class="flex flex-col items-center p-1 w-16 hover:bg-surface-container-high transition-colors rounded cursor-pointer animate-in fade-in" onclick="setTransition('Split')">
                         <span class="material-symbols-outlined text-[24px] text-on-surface-variant">call_split</span>
                         <span class="text-[10px] text-on-surface">Split</span>

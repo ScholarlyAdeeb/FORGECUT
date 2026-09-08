@@ -6,6 +6,19 @@
  * in index.html; the concatenation is byte-identical to the original file.
  */
 // Asset uploading helpers
+
+/**
+ * Where a newly imported clip should land on a track.
+ *
+ * Every import used to be pinned to startTime 0, so importing a second video
+ * dropped it exactly on top of the first and hid it, and repeated audio
+ * imports all played at once. Appending after the last clip keeps every
+ * import visible and audible, and never silently occludes existing media.
+ */
+function nextFreeStartTime(track) {
+    if (!track || !track.clips || !track.clips.length) return 0;
+    return track.clips.reduce((end, c) => Math.max(end, (c.startTime || 0) + (c.duration || 0)), 0);
+}
 async function handleAssetUpload(file, type) {
     if (!window.ForgeCut || !window.ForgeCut.MediaEngine) {
             console.error('[Editor] MediaEngine not loaded');
@@ -43,11 +56,12 @@ async function handleAssetUpload(file, type) {
 
                 const videoClipId = `clip_${Date.now()}`;
                 const track = state.tracks.find(t => t.id === 'videoTrack');
+                const startAt = nextFreeStartTime(track);
                 const newClip = {
                     id: videoClipId,
                     assetId: asset.id,
                     name: asset.name,
-                    startTime: 0,
+                    startTime: startAt,
                     duration: Math.min(state.duration, asset.duration || 5.0),
                     trimStart: 0,
                     x: canvas.width / 2,
@@ -84,7 +98,7 @@ async function handleAssetUpload(file, type) {
                         id: linkedAudioClipId,
                         assetId: audioAssetId,
                         name: `${asset.name} (Audio)`,
-                        startTime: 0,
+                        startTime: startAt,
                         duration: newClip.duration,
                         trimStart: 0,
                         volume: 1.0,
@@ -106,7 +120,7 @@ async function handleAssetUpload(file, type) {
                     id: `clip_${Date.now()}`,
                     assetId: asset.id,
                     name: asset.name,
-                    startTime: 0,
+                    startTime: nextFreeStartTime(track),
                     duration: Math.min(state.duration, asset.duration || 5.0),
                     trimStart: 0,
                     volume: 1.0,
@@ -121,7 +135,7 @@ async function handleAssetUpload(file, type) {
                     id: `clip_${Date.now()}`,
                     assetId: asset.id,
                     name: asset.name,
-                    startTime: 0,
+                    startTime: nextFreeStartTime(track),
                     duration: 5.0,
                     trimStart: 0,
                     x: canvas.width / 2,
@@ -283,4 +297,4 @@ window.handleAssetUpload = handleAssetUpload;
         renderTimeline();
         selectClip(newClip.id);
     };
-
+

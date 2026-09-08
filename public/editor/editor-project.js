@@ -231,6 +231,39 @@
 
     window.saveStateToHistory = saveStateToHistory;
 
+    /**
+     * Run an edit so that it is undoable, correctly.
+     *
+     * HistoryManager.pushState snapshots the CURRENT state, so the snapshot
+     * must be taken BEFORE the edit mutates anything. Calling
+     * saveStateToHistory() afterwards looks right, reviews fine, and produces
+     * an undo that restores the state the edit just created — undo appears to
+     * do nothing. That exact bug shipped twice (positionObject and the macOS
+     * timeline drag), so the ordering lives here instead of at each call site.
+     *
+     *   withHistory('Centre Clip', () => { clip.x = w / 2; });
+     */
+    window.withHistory = function (label, mutate) {
+        saveStateToHistory(label);
+        return mutate();
+    };
+
+    /**
+     * Commit a gesture that has ALREADY mutated state as it ran (a drag, a
+     * trim). There is nothing left to snapshot by the time the mouse comes up,
+     * so rewind to the pre-gesture values, snapshot, then re-apply — leaving
+     * one undo entry for the whole gesture.
+     *
+     *   commitGesture('Drag Clip',
+     *       () => Object.assign(clip, before),
+     *       () => Object.assign(clip, after));
+     */
+    window.commitGesture = function (label, rewind, replay) {
+        rewind();
+        saveStateToHistory(label);
+        replay();
+    };
+
     window.triggerUndo = function () {
         if (window.ForgeCut && window.ForgeCut.HistoryManager) {
             window.ForgeCut.HistoryManager.undo();

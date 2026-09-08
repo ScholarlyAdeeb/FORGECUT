@@ -1,0 +1,32 @@
+{
+  "note": "Known dangling element references. Shrink this list; never grow it.",
+  "ids": [
+    "addLabelBtn",
+    "backstageUploadInput",
+    "batchExportSelectedBtn",
+    "batchGalleryBackBtn",
+    "batchGalleryGrid",
+    "batchSelectAllBtn",
+    "csvPlaceholdersContainer",
+    "csvRowFieldsContainer",
+    "csvRowFieldsWrapper",
+    "insp_shape_fill_image",
+    "inspector-section-animation",
+    "labelTextMask",
+    "linkLabelBtn",
+    "nextFrameBtn",
+    "prevFrameBtn",
+    "queueAddBtn",
+    "queueExportBtn",
+    "queueList",
+    "queueSelectAllBtn",
+    "ribbonPlayIcon",
+    "safeAreaGuide",
+    "showTimingCheckbox",
+    "timelineTrackHeadersContainer",
+    "titleBarProjectName",
+    "volumeSlider",
+    "zoomInBtn",
+    "zoomOutBtn"
+  ]
+}

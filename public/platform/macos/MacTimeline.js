@@ -297,19 +297,22 @@
         const orig = drag.orig;
         drag = null;
         if (moved) {
-            // pushState snapshots the CURRENT state, and the gesture has
-            // already mutated the clip. Roll back to the pre-drag values, take
-            // the snapshot, then re-apply — otherwise undo would "restore" the
-            // position the drag just created and appear to do nothing.
-            if (typeof saveStateToHistory === 'function') {
+            // The gesture already mutated the clip, so there is nothing left to
+            // snapshot. commitGesture rewinds, snapshots, then re-applies,
+            // leaving one undo entry for the whole drag.
+            if (typeof commitGesture === 'function') {
                 const after = { start: clip.startTime, dur: clip.duration, trim: clip.trimStart };
-                clip.startTime = orig.start;
-                clip.duration = orig.dur;
-                if (orig.trim !== undefined) clip.trimStart = orig.trim;
-                saveStateToHistory('Timeline Edit');
-                clip.startTime = after.start;
-                clip.duration = after.dur;
-                if (after.trim !== undefined) clip.trimStart = after.trim;
+                commitGesture('Timeline Edit',
+                    () => {
+                        clip.startTime = orig.start;
+                        clip.duration = orig.dur;
+                        if (orig.trim !== undefined) clip.trimStart = orig.trim;
+                    },
+                    () => {
+                        clip.startTime = after.start;
+                        clip.duration = after.dur;
+                        if (after.trim !== undefined) clip.trimStart = after.trim;
+                    });
             }
             // Keep a linked audio clip aligned, as the shared layer expects.
             if (clip.linkedClipId && typeof findClipById === 'function') {

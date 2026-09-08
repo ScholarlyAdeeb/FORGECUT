@@ -218,8 +218,9 @@
         host.append(group('Transition', 'transition', (b) => {
             const sel = el('select', 'mac-select');
             // 'Morph' is deliberately absent: TransitionEngine has no case for
-            // it, so choosing it silently produced a hard cut.
-            ['None', 'Fade', 'Dissolve', 'Push', 'Wipe', 'Split', 'Reveal', 'Cut'].forEach(n => {
+            // it, so choosing it silently produced a hard cut. Zoom and
+            // Dip To Black are engine transitions that had no UI before.
+            ['None', 'Fade', 'Dissolve', 'Push', 'Wipe', 'Split', 'Reveal', 'Zoom', 'Dip To Black', 'Cut'].forEach(n => {
                 const o = el('option', null, n);
                 o.value = n;
                 if ((clip.transition || 'None') === n) o.selected = true;
