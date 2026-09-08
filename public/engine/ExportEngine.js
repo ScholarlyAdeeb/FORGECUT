@@ -178,6 +178,13 @@
                 }
 
                 updateProgressUI(frame, totalFrames, startTime);
+
+                // Per-export progress, distinct from the module-level _onProgress
+                // handler: a batch caller needs to know which job this is for.
+                if (typeof options.onFrame === 'function') {
+                    options.onFrame(frame / totalFrames);
+                }
+
                 await _waitUntil(startTime + ((frame + 1) * 1000) / fps);
             }
 
@@ -416,28 +423,47 @@
     /**
      * Export batch variations.
      */
+    /**
+     * Render one video per selected CSV row.
+     *
+     * Sequential and real-time by construction: exportWithMediaRecorder paces
+     * frames to the wall clock because canvas.captureStream samples on it, so
+     * N rows of D seconds cost roughly N*D seconds.
+     *
+     * `hooks` lets a platform UI drive its own queue display instead of the
+     * footer status line: onJobStart(rowIndex, ordinal, total),
+     * onJobProgress(rowIndex, 0..1) and onJobDone(rowIndex, {ok, blob, name,
+     * error}). Pass autoDownload:false to receive the blobs and package them
+     * yourself later.
+     */
     async function exportBatch(state, renderFn, options) {
         options = options || {};
-        const format = options.format || 'webm';
-        const selectedIndices = [];
+        const hooks = options.hooks || {};
+        const autoDownload = options.autoDownload !== false;
 
-        state.csvData.forEach((_, idx) => {
-            if (!state.batchSelection || state.batchSelection[idx]) {
-                selectedIndices.push(idx);
-            }
-        });
+        let selectedIndices;
+        if (Array.isArray(options.indices)) {
+            selectedIndices = options.indices.slice();
+        } else {
+            selectedIndices = [];
+            state.csvData.forEach((_, idx) => {
+                if (!state.batchSelection || state.batchSelection[idx]) {
+                    selectedIndices.push(idx);
+                }
+            });
+        }
 
         if (selectedIndices.length === 0) {
             fcToast('Please select at least one variation to export.');
-            return;
+            return { blobs: [], failures: [], cancelled: false };
         }
 
         _cancelRequested = false;
         showExportUI(true);
 
-        const zip = window.JSZip ? new JSZip() : null;
         const origIndex = state.selectedRowIndex;
         const blobs = [];
+        const failures = [];
 
         for (let i = 0; i < selectedIndices.length; i++) {
             if (_cancelRequested) break;
@@ -447,43 +473,63 @@
             state.currentTime = 0;
 
             updateBatchProgressUI(i, selectedIndices.length);
+            if (hooks.onJobStart) hooks.onJobStart(r, i, selectedIndices.length);
 
             try {
                 const blob = await exportWithMediaRecorder(state, renderFn, {
                     canvas: options.canvas,
                     format: 'webm',
-                    fps: options.fps || 30
+                    fps: options.fps || 30,
+                    onFrame: hooks.onJobProgress ? (p) => hooks.onJobProgress(r, p) : null
                 });
 
-                const row = state.csvData[r];
+                const row = state.csvData[r] || {};
                 const keys = Object.keys(row);
                 const name = row[keys[0]] || `variation_${r + 1}`;
-                const fileName = `ForgeCut_${name.replace(/[^a-zA-Z0-9]/g, '_')}.webm`;
+                const fileName = `ForgeCut_${String(name).replace(/[^a-zA-Z0-9]/g, '_')}.webm`;
 
-                if (zip) {
-                    zip.file(fileName, blob);
-                }
-                blobs.push({ name: fileName, blob });
+                blobs.push({ index: r, name: fileName, blob });
+                if (hooks.onJobDone) hooks.onJobDone(r, { ok: true, blob, name: fileName });
             } catch (e) {
+                // This used to only console.error, so a row that failed to render
+                // silently vanished from the ZIP while the user was told the
+                // batch had succeeded. Failures are now reported to the caller.
                 console.error(`[ExportEngine] Batch item ${r} failed:`, e);
+                failures.push({ index: r, error: e });
+                if (hooks.onJobDone) hooks.onJobDone(r, { ok: false, error: e });
             }
         }
 
         state.selectedRowIndex = origIndex;
         state.currentTime = 0;
+        showExportUI(false);
 
-        // Download as ZIP
-        if (zip && blobs.length > 0) {
+        const cancelled = _cancelRequested;
+        if (autoDownload && blobs.length > 0) {
+            await downloadZip(blobs, 'ForgeCut_Batch_Export.zip');
+        }
+        return { blobs, failures, cancelled };
+    }
+
+    /**
+     * Package rendered blobs into one ZIP download, falling back to individual
+     * downloads when JSZip is missing or the archive cannot be built.
+     */
+    async function downloadZip(entries, filename) {
+        if (!entries || !entries.length) return false;
+        if (window.JSZip) {
             try {
+                const zip = new JSZip();
+                entries.forEach(e => zip.file(e.name, e.blob));
                 const zipBlob = await zip.generateAsync({ type: 'blob' });
-                downloadBlob(zipBlob, 'ForgeCut_Batch_Export.zip');
+                downloadBlob(zipBlob, filename || 'ForgeCut_Batch_Export.zip');
+                return true;
             } catch (e) {
-                // Fallback: download individually
-                blobs.forEach(b => downloadBlob(b.blob, b.name));
+                console.error('[ExportEngine] ZIP packaging failed, downloading individually:', e);
             }
         }
-
-        showExportUI(false);
+        entries.forEach(e => downloadBlob(e.blob, e.name));
+        return true;
     }
 
     function downloadBlob(blob, filename) {
@@ -563,6 +609,7 @@
         cancelExport,
         retryExport,
         downloadBlob,
+        downloadZip,
         audioBufferToWav,
         onProgress, onComplete, onError,
         get isLoaded() { return _ffmpegLoaded; },

@@ -138,7 +138,11 @@ window.batchQueueState = {
     currentIndex: 0,
     activeJobs: [],
     timer: null,
-    averageRenderTime: 2.0 // average seconds per job
+    // Rendering is real-time, so a job costs one second of wall clock per
+    // second of output. startBatchGenerate sets this from the real clip length.
+    averageRenderTime: 30.0,
+    // rowIndex -> { index, name, blob } for every variation actually rendered.
+    outputs: new Map()
 };
 
 window.openBulkDrawer = function() {
@@ -230,9 +234,9 @@ window.updateBulkDrawerList = function() {
             <td class="p-3 font-mono text-[10px] truncate max-w-[200px]" title="${esc(job.csvRow)}">${esc(job.csvRow)}</td>
             <td class="p-3">
                 <div class="w-20 bg-white/10 h-1.5 rounded-full overflow-hidden">
-                    <div class="bg-primary h-full transition-all duration-300" style="width: ${job.progress}%"></div>
+                    <div class="bg-primary h-full transition-all duration-300 js-job-bar" style="width: ${job.progress}%"></div>
                 </div>
-                <div class="text-[9px] text-outline mt-1 font-semibold">${job.progress}%</div>
+                <div class="text-[9px] text-outline mt-1 font-semibold js-job-pct">${job.progress}%</div>
             </td>
             <td class="p-3">
                 <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold ${badgeColor}">${esc(job.status)}</span>
@@ -290,7 +294,25 @@ window.updateDashboardStats = function() {
 };
 
 // Queue control execution loops
-window.startBatchGenerate = function(all = false) {
+/**
+ * Repaint just the progress cell of one job.
+ *
+ * A real render emits a progress event per frame (30/s), and
+ * updateBulkDrawerList rebuilds the entire tbody, so calling it per frame would
+ * be O(frames x rows). Only the two nodes that actually changed are touched.
+ */
+function updateJobProgressCell(job) {
+    const tableBody = document.getElementById('bulkDrawerTableBody');
+    if (!tableBody) return;
+    const tr = tableBody.querySelector(`tr[data-job-id="${job.id}"]`);
+    if (!tr) return;
+    const bar = tr.querySelector('.js-job-bar');
+    const pct = tr.querySelector('.js-job-pct');
+    if (bar) bar.style.width = `${job.progress}%`;
+    if (pct) pct.textContent = `${job.progress}%`;
+}
+
+window.startBatchGenerate = async function(all = false) {
     if (!state.batchJobs || state.batchJobs.length === 0) {
         fcToast('Please load a CSV configuration file before generating.');
         return;
@@ -301,9 +323,14 @@ window.startBatchGenerate = function(all = false) {
         return;
     }
 
+    if (!window.ForgeCut || !window.ForgeCut.ExportEngine) {
+        fcToast('Export engine unavailable - cannot render.');
+        return;
+    }
+
     window.batchQueueState.isRunning = true;
     window.batchQueueState.isPaused = false;
-    
+
     // Determine active jobs list
     window.batchQueueState.activeJobs = state.batchJobs.filter(job => {
         if (all) {
@@ -327,85 +354,110 @@ window.startBatchGenerate = function(all = false) {
         }
     });
 
+    window.batchQueueState.averageRenderTime = Math.max(0.5, state.duration || 30);
     window.batchQueueState.currentIndex = 0;
     window.updateBulkDrawerList();
-    window.processNextBatchJob();
+
+    await window.runBatchQueue();
 };
 
-window.processNextBatchJob = function() {
-    if (!window.batchQueueState.isRunning || window.batchQueueState.isPaused) return;
+/**
+ * Render pending jobs one at a time through the real export engine.
+ *
+ * Each variation is a genuine MediaRecorder capture of the canvas composed for
+ * that CSV row, so the queue advances in real time. Pause is checked between
+ * jobs - a render in flight is allowed to finish rather than be thrown away,
+ * since restarting it would cost its full duration again. Cancel aborts the
+ * in-flight render as well as the queue.
+ */
+window.runBatchQueue = async function() {
+    const qs = window.batchQueueState;
+    const engine = window.ForgeCut && window.ForgeCut.ExportEngine;
+    if (!engine) return;
+    const canvasEl = document.getElementById('renderCanvas');
 
-    // Find first pending job in our active list
-    const job = window.batchQueueState.activeJobs.find(j => j.status === 'Pending');
-    if (!job) {
-        // Queue finished!
-        window.batchQueueState.isRunning = false;
+    while (qs.isRunning && !qs.isPaused) {
+        const job = qs.activeJobs.find(j => j.status === 'Pending');
+        if (!job) break;
+
+        job.status = 'Rendering';
+        job.progress = 0;
         window.updateBulkDrawerList();
-        fcToast('Batch output rendering queue finished successfully!');
-        return;
+
+        let lastPaint = 0;
+        let thumbTaken = false;
+
+        const result = await engine.exportBatch(state, renderCanvasComposition, {
+            canvas: canvasEl,
+            fps: job.fps || 30,
+            indices: [job.id],
+            autoDownload: false,
+            hooks: {
+                onJobProgress: (rowIndex, p) => {
+                    job.progress = Math.round(p * 100);
+                    // Grab the thumbnail mid-render, while the canvas still holds
+                    // THIS row's composition: exportBatch restores the previously
+                    // selected row before it returns.
+                    if (!thumbTaken && p >= 0.5 && canvasEl) {
+                        thumbTaken = true;
+                        job.thumbnail = canvasEl.toDataURL('image/jpeg', 0.25);
+                    }
+                    const now = performance.now();
+                    if (now - lastPaint > 100) {
+                        lastPaint = now;
+                        updateJobProgressCell(job);
+                    }
+                }
+            }
+        });
+
+        if (!qs.isRunning) break; // cancelled mid-render; statuses already set
+
+        const output = result.blobs[0];
+        if (output) {
+            job.progress = 100;
+            job.status = 'Completed';
+            qs.outputs.set(job.id, output);
+        } else if (result.cancelled) {
+            job.status = 'Cancelled';
+            job.progress = 0;
+        } else {
+            const failure = result.failures[0];
+            job.status = 'Failed';
+            job.error = failure
+                ? String((failure.error && failure.error.message) || failure.error)
+                : 'Render failed';
+        }
+        window.updateBulkDrawerList();
     }
 
-    // Start rendering this job
-    job.status = 'Rendering';
-    window.updateBulkDrawerList();
-
-    // Select the row in the editor to load the actual timeline/canvas composition
-    window.selectRow(job.id);
-
-    let progress = 0;
-    const intervalTime = (window.batchQueueState.averageRenderTime * 1000) / 10; // 10 steps
-
-    window.batchQueueState.timer = setInterval(() => {
-        if (window.batchQueueState.isPaused) {
-            clearInterval(window.batchQueueState.timer);
-            return;
-        }
-
-        progress += 10;
-        job.progress = progress;
-        
-        // Grab real canvas thumbnail midway
-        if (progress === 50) {
-            const canvasEl = document.getElementById('renderCanvas');
-            if (canvasEl) {
-                job.thumbnail = canvasEl.toDataURL('image/jpeg', 0.25);
-            }
-        }
-
-        if (progress >= 100) {
-            clearInterval(window.batchQueueState.timer);
-            // 5% chance of mock fail to satisfy 'Failed' status coverage
-            job.status = Math.random() < 0.05 ? 'Failed' : 'Completed';
-            window.updateBulkDrawerList();
-            
-            // Loop next
-            setTimeout(window.processNextBatchJob, 200);
-        } else {
-            window.updateBulkDrawerList();
-        }
-    }, intervalTime);
+    if (qs.isRunning && !qs.isPaused) {
+        qs.isRunning = false;
+        window.updateBulkDrawerList();
+        const done = state.batchJobs.filter(j => j.status === 'Completed').length;
+        const failed = state.batchJobs.filter(j => j.status === 'Failed').length;
+        fcToast(failed
+            ? `Rendering finished: ${done} rendered, ${failed} failed.`
+            : `Rendering finished: ${done} variation${done === 1 ? '' : 's'} ready to export.`);
+    }
 };
 
 window.pauseBatchQueue = function() {
-    if (window.batchQueueState.isRunning) {
+    if (window.batchQueueState.isRunning && !window.batchQueueState.isPaused) {
+        // The in-flight render is left to finish rather than discarded: it is a
+        // real capture, and restarting it would cost its full duration again.
         window.batchQueueState.isPaused = true;
-        clearInterval(window.batchQueueState.timer);
-        // Find rendering job and set to Pending so we can resume
-        const currentJob = state.batchJobs.find(j => j.status === 'Rendering');
-        if (currentJob) {
-            currentJob.status = 'Pending';
-        }
         window.updateBulkDrawerList();
-        fcToast('Queue paused.');
+        fcToast('Pausing after the current variation finishes...');
     }
 };
 
-window.resumeBatchQueue = function() {
+window.resumeBatchQueue = async function() {
     if (window.batchQueueState.isRunning && window.batchQueueState.isPaused) {
         window.batchQueueState.isPaused = false;
         window.updateBulkDrawerList();
-        window.processNextBatchJob();
         fcToast('Queue resumed.');
+        await window.runBatchQueue();
     }
 };
 
@@ -413,7 +465,10 @@ window.cancelBatchQueue = function() {
     if (window.batchQueueState.isRunning) {
         window.batchQueueState.isRunning = false;
         window.batchQueueState.isPaused = false;
-        clearInterval(window.batchQueueState.timer);
+        // Abort the render in flight too, not just the queue that schedules them.
+        if (window.ForgeCut && window.ForgeCut.ExportEngine) {
+            window.ForgeCut.ExportEngine.cancelExport();
+        }
         // Set all Pending/Rendering jobs to Cancelled
         state.batchJobs.forEach(job => {
             if (job.status === 'Pending' || job.status === 'Rendering') {
@@ -438,22 +493,33 @@ window.retryFailedBatch = function() {
     window.startBatchGenerate(false);
 };
 
-window.exportSelectedBatch = function() {
-    const selected = state.batchJobs ? state.batchJobs.filter(j => j.selected && j.status === 'Completed') : [];
-    if (selected.length === 0) {
-        fcToast('No completed variations selected for export.');
+/** Collect the rendered files for the completed jobs matching `pick`. */
+function collectRenderedOutputs(pick) {
+    const outputs = window.batchQueueState.outputs;
+    if (!state.batchJobs) return [];
+    return state.batchJobs
+        .filter(j => j.status === 'Completed' && pick(j) && outputs.has(j.id))
+        .map(j => outputs.get(j.id));
+}
+
+window.exportSelectedBatch = async function() {
+    const entries = collectRenderedOutputs(j => j.selected);
+    if (entries.length === 0) {
+        fcToast('No rendered variations selected. Run the render queue first.');
         return;
     }
-    fcToast(`Exporting ${selected.length} selected completed variations...`);
+    fcToast(`Packaging ${entries.length} variation${entries.length === 1 ? '' : 's'}...`);
+    await window.ForgeCut.ExportEngine.downloadZip(entries, 'ForgeCut_Selected_Variations.zip');
 };
 
-window.exportAllBatch = function() {
-    const completed = state.batchJobs ? state.batchJobs.filter(j => j.status === 'Completed') : [];
-    if (completed.length === 0) {
-        fcToast('No completed variations to export. Please run render queue first.');
+window.exportAllBatch = async function() {
+    const entries = collectRenderedOutputs(() => true);
+    if (entries.length === 0) {
+        fcToast('No rendered variations to export. Please run the render queue first.');
         return;
     }
-    fcToast(`Packaging all ${completed.length} completed variations into ZIP archive download...`);
+    fcToast(`Packaging all ${entries.length} variation${entries.length === 1 ? '' : 's'}...`);
+    await window.ForgeCut.ExportEngine.downloadZip(entries, 'ForgeCut_Batch_Export.zip');
 };
 
 window.clearCompletedBatch = function() {
@@ -463,6 +529,7 @@ window.clearCompletedBatch = function() {
             job.status = 'Pending';
             job.progress = 0;
             job.thumbnail = '';
+            window.batchQueueState.outputs.delete(job.id);
         }
     });
     window.updateBulkDrawerList();

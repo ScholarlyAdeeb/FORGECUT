@@ -593,9 +593,18 @@
     }
 
     let batchExportTimeout = null;
+    // This deliberately shadows the startBulkExport defined in editor-csv.js,
+    // which drives the older batch-gallery overlay. That overlay is dead — its
+    // renderer looks up #batchGalleryGrid while the markup declares
+    // #batchGalleryGridList — so the bulk drawer is the live UI and wins by
+    // load order (index.html loads editor-csv.js before this file).
+    //
+    // The override is now only a UI choice: startBatchGenerate renders through
+    // ForgeCut.ExportEngine, the same engine editor-csv.js would have used.
+    // Do not "fix" this by deleting it without first reviving that overlay.
     window.startBulkExport = function () {
         window.openBulkDrawer();
-        window.startBatchGenerate(true);
+        return window.startBatchGenerate(true);
     };
 
     window.cancelBatchExport = function () {
@@ -609,4 +618,4 @@
     window.downloadAllRenderedBatchOutputs = function () {
         window.exportAllBatch();
     };
-
+
