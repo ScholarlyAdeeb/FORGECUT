@@ -2,6 +2,9 @@ const path = require('path');
 const express = require('express');
 const compression = require('compression');
 
+const exportApi = require('./server/export-api.js');
+const exportService = require('./server/ffmpeg-service.js');
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 const PUBLIC_DIR = path.join(__dirname, 'public');
@@ -22,6 +25,12 @@ app.use((req, res, next) => {
     res.setHeader('Referrer-Policy', 'no-referrer');
     next();
 });
+
+// The export API is the ONLY write-capable surface in this server, so it is
+// mounted ahead of the read-only guard below and nothing else is exempt.
+// Its own router restricts methods, validates the job id shape, caps upload
+// size, and never accepts a filesystem path or command string from the client.
+app.use('/api/export', exportApi.createRouter());
 
 // Reject anything but safe read methods before it reaches the static handlers.
 app.use((req, res, next) => {
@@ -108,8 +117,20 @@ process.on('unhandledRejection', (reason) => {
     console.error('[ForgeCut] unhandled rejection:', reason);
 });
 
+// Reap temp directories from jobs the client abandoned, and any left behind by
+// a previous process that did not shut down cleanly.
+const sweepTimer = setInterval(() => {
+    exportService.sweep().catch(err => console.error('[ForgeCut] export sweep failed:', err && err.message));
+}, 10 * 60 * 1000);
+sweepTimer.unref();
+
 const server = app.listen(PORT, () => {
     console.log(`ForgeCut running at http://localhost:${PORT}`);
+    exportService.probeCapabilities().then(caps => {
+        console.log(caps.available
+            ? `[ForgeCut] server encoder: ${caps.containers.join(', ')} via ${caps.version}`
+            : `[ForgeCut] server encoder unavailable (${caps.reason}) - exports will use the in-browser encoder.`);
+    });
 });
 
 server.on('error', (err) => {
@@ -124,6 +145,10 @@ server.on('error', (err) => {
 // Let nodemon/CI/container stops close connections cleanly instead of being killed.
 for (const signal of ['SIGINT', 'SIGTERM']) {
     process.on(signal, () => {
+        // Encoders are child processes and temp dirs can be gigabytes; neither
+        // should outlive the server.
+        exportService.shutdownSync();
         server.close(() => process.exit(0));
     });
 }
+process.on('exit', () => exportService.shutdownSync());
