@@ -294,7 +294,7 @@
      * shared engine: every other platform would have had to either adopt
      * those element ids or watch the engine miss its own buttons. The engine
      * now reports what happened and each platform layer decides how to show
-     * it — see platform/windows/editor/editor-transport.js for the Ribbon's
+     * it — see editor/editor-transport.js for the Ribbon's
      * listener.
      */
     function updateTransportUI(icon) {

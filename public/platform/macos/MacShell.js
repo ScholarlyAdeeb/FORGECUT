@@ -102,7 +102,7 @@
         Mac._inspBtn = inspBtn;
 
         const g5 = group();
-        g5.append(tb('share', 'Share', 'Export project (⌘E)', () => { call('startBulkExport'); }, { primary: true }));
+        g5.append(tb('share', 'Share', 'Export project (⌘E)', () => Mac.exportSheet(), { primary: true }));
         syncToggleButtons();
     }
 
@@ -119,7 +119,7 @@
                 { label: 'Import Media…', shortcut: '⌘I', action: () => call('openImportPicker') },
                 'separator',
                 { label: 'Save Project', shortcut: '⌘S', action: () => call('saveProject') },
-                { label: 'Export…', shortcut: '⌘E', action: () => call('startBulkExport') }
+                { label: 'Export…', shortcut: '⌘E', action: () => Mac.exportSheet() }
             ],
             Edit: () => [
                 { label: 'Undo', shortcut: '⌘Z', action: () => { call('triggerUndo'); refreshAll(); } },
@@ -354,6 +354,31 @@
         input.click();
     };
 
+    /**
+     * macOS share/export. A sheet that states what will be produced and lets
+     * the user confirm, then hands off to the SAME shared export command the
+     * Windows Export button uses — no second export path.
+     */
+    Mac.exportSheet = async function () {
+        const s = window.state;
+        const clips = (s.tracks || []).reduce((n, t) => n + (t.clips || []).length, 0);
+        if (!clips) {
+            Mac.sheet('Add at least one clip to the timeline before exporting.',
+                { title: 'Nothing to Export', okLabel: 'OK', cancelLabel: 'Close' });
+            return;
+        }
+        const res = window.canvas ? `${canvas.width} × ${canvas.height}` : 'project resolution';
+        const rows = (s.csvData && s.csvData.length) ? s.csvData.length : 1;
+        const detail = rows > 1
+            ? `${rows} variations from the loaded CSV, ${res}, ${(s.duration || 0).toFixed(2)}s each.`
+            : `One video at ${res}, ${(s.duration || 0).toFixed(2)}s, from ${clips} clip${clips > 1 ? 's' : ''}.`;
+
+        const go = await Mac.sheet(detail, {
+            title: 'Export Project', okLabel: 'Export', cancelLabel: 'Cancel', cancelValue: false
+        });
+        if (go === true) call('startBulkExport');
+    };
+
     window.triggerOpenProject = function () {
         const input = document.createElement('input');
         input.type = 'file';
@@ -448,14 +473,13 @@
     Mac.refreshAll = refreshAll;
 
     /* ── Keyboard ───────────────────────────────────────────────────────────
-       The shared KeyboardShortcuts engine already owns Space, S, Delete,
-       Home/End and the whole Ctrl+ set — and it normalises metaKey to Ctrl,
-       so ⌘Z / ⌘C / ⌘V / ⌘X / ⌘D / ⌘N / ⌘O / ⌘S / ⌘E / ⌘+ / ⌘− already reach
-       the right commands on a Mac. Re-binding them here would run every one
-       of them twice (two undos per ⌘Z).
+       The shared handler in editor/editor-interaction.js computes
+       (e.ctrlKey || e.metaKey), so ⌘Z / ⌘C / ⌘V / ⌘N, Space and Delete already
+       reach the right commands on a Mac. Re-binding those here would run each
+       command twice — two undos per ⌘Z.
 
-       So this layer registers ONLY the chords the shared engine does not
-       cover, and otherwise lets the shared command architecture do its job. */
+       So this layer registers ONLY the chords that handler misses or maps
+       differently, and otherwise lets the shared command architecture work. */
     function installShortcuts() {
         // Capture phase: the shared handler listens on window during bubble,
         // so capturing here lets macOS claim a chord the shared layer maps
@@ -481,7 +505,7 @@
             else if (key === 's') { claim(); call('saveProject'); }
             else if (key === 'x') { claim(); call('timelineCut'); refreshAll(); }
             else if (key === 'd') { claim(); call('timelineDuplicate'); refreshAll(); }
-            else if (key === 'e') { claim(); call('startBulkExport'); }
+            else if (key === 'e') { claim(); Mac.exportSheet(); }
         }, true);
 
         // The shared engine's zoom commands drive state.zoom; mirror that onto

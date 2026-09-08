@@ -91,33 +91,33 @@ for (const f of walk(ENGINE)) {
 // Rule 2 — a platform layer must not load or reference another platform's
 // files. Relative forms ("../windows/") count: they are the easy way to
 // smuggle a cross-platform dependency past a naive check.
-//
-// One documented exception: the shared command layer (project state, media
-// import, clip commands, undo wiring) still lives under
-// platform/windows/editor/ because 14 of its 16 files also carry Windows
-// rendering. Other platforms legitimately consume it — its Windows rendering
-// simply no-ops when the Ribbon DOM is absent. This is reported every run so
-// it stays visible until that layer is extracted into the shared engine.
-const SHARED_COMMAND_LAYER = 'windows/editor/';
-const exceptions = [];
-
 for (const p of platforms) {
     for (const f of walk(path.join(PLATFORM, p))) {
         const clean = stripComments(read(f));
         for (const other of platforms) {
             if (other === p) continue;
-            const hits = [`platform/${other}/`, `../${other}/`];
-            for (const h of hits) {
-                if (!clean.includes(h)) continue;
-                if (other === 'windows' && clean.includes(SHARED_COMMAND_LAYER)) {
-                    exceptions.push(`${rel(f)} consumes the shared command layer (platform/${SHARED_COMMAND_LAYER})`);
-                } else {
-                    violations.push(`${rel(f)} reaches into platform/${other}/`);
-                }
-                break;
+            if (clean.includes(`platform/${other}/`) || clean.includes(`../${other}/`)) {
+                violations.push(`${rel(f)} reaches into platform/${other}/`);
             }
         }
     }
+}
+
+// public/editor/ is the shared command layer: project state, media import,
+// clip commands, undo wiring. Every shell loads it. Most of its files still
+// carry the Windows *rendering* they were split from, which is inert on other
+// platforms because the Ribbon DOM is absent. That is tracked debt, not a
+// violation — report the size of it so it cannot quietly grow.
+const EDITOR = path.join(ROOT, 'editor');
+const notes = [];
+if (fs.existsSync(EDITOR)) {
+    const files = walk(EDITOR);
+    let coupled = 0;
+    for (const f of files) {
+        const refs = idsReferencedIn(read(f));
+        if (refs.some(id => owned.windows && owned.windows.has(id))) coupled++;
+    }
+    notes.push(`shared command layer: ${files.length} files, ${coupled} still carry Windows-specific DOM`);
 }
 
 const engineFiles = walk(ENGINE).length;
@@ -131,7 +131,7 @@ if (violations.length) {
 }
 
 console.log(`Platform boundaries OK — shared engine: ${engineFiles} files, platforms: ${platformSummary}`);
-if (exceptions.length) {
-    console.log('\nKnown exception (tracked debt, see ARCHITECTURE.md):');
-    for (const e of new Set(exceptions)) console.log('  ' + e);
+if (notes.length) {
+    console.log('\nTracked debt (see ARCHITECTURE.md):');
+    for (const n of notes) console.log('  ' + n);
 }

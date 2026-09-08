@@ -8,14 +8,19 @@ expected to be completely different on Windows, macOS and Android.
 
 ```
 public/
-  engine/              shared editor engine — no platform UI
+  engine/              shared editor engine — no platform UI at all
+  editor/              shared command layer — state, commands, import, history
   platform/
     windows/           Microsoft Office / Fluent Ribbon  (protected baseline)
-    macos/             Apple HIG + Liquid Glass          (not yet built)
+    macos/             Apple HIG + Liquid Glass
     android/           Material 3 Expressive             (not yet built)
   workers/             shared off-thread work
-  index.html           currently the Windows shell
+  index.html           the Windows shell
+  platform/macos/index.html   the macOS shell
 ```
+
+Every shell loads `engine/` + `editor/` and then exactly one platform's
+presentation. Nothing under `platform/` is loaded by more than one shell.
 
 ## The rule
 
@@ -52,7 +57,6 @@ platform reaches into another. Run it before committing UI work.
 | `MediaEngine.js` | media elements | import, decode, thumbnails, waveforms |
 | `ExportEngine.js` | canvas / ffmpeg | |
 | `PlaybackEngine.js` | media elements | reports transport via an event, see below |
-| `KeyboardShortcuts.js` | key events | command *semantics*; platform layers own the chords they surface |
 
 None of these reference a platform's DOM. `PlaybackEngine` used to write
 directly into the Ribbon's transport icons; it now emits:
@@ -64,34 +68,44 @@ window.addEventListener('forgecut:transport', (e) => {
 ```
 
 Each platform decides how to render that. The Windows listener lives in
-`platform/windows/editor/editor-transport.js`.
+`editor/editor-transport.js`.
 
 ## Windows — `public/platform/windows/`
 
 `components/` builds the Ribbon, sidebar, preview, timeline, export queue,
-backstage and bulk drawer. `editor/` is the Windows controller layer: it owns
-the Ribbon command handlers, the inspector, timeline interaction and the
-Windows-specific DOM. `RibbonScaler.js` implements Office-style progressive
-ribbon scaling and the Ribbon Display Options menu.
+backstage and bulk drawer. `RibbonScaler.js` implements Office-style
+progressive ribbon scaling and the Ribbon Display Options menu.
+
+That is the whole Windows layer — 9 files. The commands its Ribbon invokes live
+in the shared `editor/` layer, not here.
+
+## Shared command layer — `public/editor/`
+
+Project state, media import, timeline data, clip commands, undo wiring and
+export. Both shells load it; neither owns it.
+
+16 files, of which **14 still carry the Windows rendering they were split
+from**. That rendering is inert on other platforms because the Ribbon DOM is
+absent, which is why macOS can consume the layer unchanged. The boundary
+checker prints that count on every run so the debt cannot quietly grow.
+
+This directory briefly lived under `platform/windows/` on the grounds that most
+of its files touch Windows DOM. Building the macOS layer disproved that: both
+shells load all 16 files identically, so the *behaviour* is shared and only the
+rendering is Windows-flavoured. It belongs in a shared location.
 
 ### Known debt
 
-`platform/windows/editor/` is shared behaviour wearing Windows rendering. The
-macOS shell consumes it (its Windows rendering no-ops when the Ribbon DOM is
-absent), which the boundary checker reports on every run as a tracked
-exception. Extracting the command layer into `engine/` is the natural next
-structural step, and would remove that exception.
-
-Two files there contain no Windows-specific DOM at all and are the first
-candidates to move into the shared engine:
+Two files here contain no Windows-specific DOM at all and are the cleanest
+candidates to promote into `engine/`:
 
 - `editor-render.js` (486 LOC) — canvas compositing, identical on every platform
 - `editor-clips.js` (109 LOC)
 
-They are not extracted yet because both depend on globals declared in
-`editor-core.js` (`state`, `canvas`, `assetCache`). Extracting them means giving
-the engine an explicit state handle first. Until then they stay with the Windows
-layer rather than being falsely advertised as shared.
+Both depend on globals declared in `editor-core.js` (`state`, `canvas`,
+`assetCache`). Promoting them to `engine/` without an explicit state handle
+would invert the dependency — the engine relying on globals a sibling layer
+declares — so the state handle comes first.
 
 Also deliberately outstanding: the phone layout in `editor.css` collapses the
 Ribbon into chips below 768px. That contradicts the rule against shrinking the

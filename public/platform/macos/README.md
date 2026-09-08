@@ -51,7 +51,7 @@ Fallbacks: `@supports not (backdrop-filter)` and
 
 ## Keyboard
 
-The shared handler in `platform/windows/editor/editor-interaction.js` already
+The shared handler in `editor/editor-interaction.js` already
 treats `metaKey` as Ctrl, so ⌘Z, ⌘C, ⌘V, ⌘N, Space and Delete reach the right
 commands unaided. **Re-binding those here would run each command twice.**
 
@@ -74,10 +74,9 @@ Timeline zoom is **not** re-implemented: the shared zoom commands drive
   without a null guard. The shell provides a hidden sink element so those
   writes land harmlessly rather than throwing. Removing protected Windows code
   was not an option; delete the sink if that guard is ever added.
-- The shell loads the shared command layer from `platform/windows/editor/`.
-  That directory is shared behaviour wearing Windows rendering, and the
-  boundary checker reports it every run as tracked debt. Extracting it into
-  `engine/` is the natural next structural step.
+- The shell loads the shared command layer from `editor/`. Most of its files
+  still carry Windows rendering, which is inert here because the Ribbon DOM is
+  absent; the boundary checker prints that count every run as tracked debt.
 - Do not introduce Material 3 or mobile patterns here. Narrow Mac windows stay
   a desktop layout: the sidebar yields first, as in Xcode and Final Cut.
 
