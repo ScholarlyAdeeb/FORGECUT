@@ -14,14 +14,38 @@
     let pendingImports = new Map();
     let audioCtxForDecode = null;
 
+    // Resolve the worker against THIS script's URL, not the page's.
+    // 'workers/MediaWorker.js' is page-relative, so it only resolved for a
+    // shell served from the site root; a shell at /platform/<name>/ asked for
+    // /platform/<name>/workers/MediaWorker.js and got a 404.
+    const ENGINE_SRC = (document.currentScript && document.currentScript.src) || '';
+    const WORKER_URL = ENGINE_SRC
+        ? new URL('../workers/MediaWorker.js', ENGINE_SRC).href
+        : 'workers/MediaWorker.js';
+
+    /** Fail every in-flight request so callers fall back instead of hanging. */
+    function failPending(reason) {
+        const pending = Array.from(pendingImports.values());
+        pendingImports.clear();
+        pending.forEach(p => p.reject(new Error(reason)));
+    }
+
     function initWorker() {
         try {
-            worker = new Worker('workers/MediaWorker.js');
+            worker = new Worker(WORKER_URL);
             worker.onmessage = handleWorkerMessage;
-            worker.onerror = (e) => console.error('[MediaEngine] Worker error:', e.message);
+            // A worker that fails to load used to only log, leaving every
+            // pending import unsettled — the import simply hung forever.
+            // Reject instead: importFile already has a main-thread fallback.
+            worker.onerror = (e) => {
+                console.error('[MediaEngine] Worker error:', (e && e.message) || e);
+                worker = null;
+                failPending('Media worker failed to load');
+            };
         } catch (e) {
             console.warn('[MediaEngine] Web Worker unavailable, using main-thread fallback');
             worker = null;
+            failPending('Media worker unavailable');
         }
     }
 

@@ -1,0 +1,841 @@
+/* ============================================================================
+   ForgeCut for macOS — presentation layer
+   ============================================================================
+
+   Apple HIG + Liquid Glass. This file styles ONLY the macOS layer; it is never
+   loaded by the Windows shell and must not reference Windows tokens.
+
+   Liquid Glass placement follows the HIG skill's own constraint:
+
+     "When NOT to use Liquid Glass: Photo/video editing — glass effects
+      compete with the content being edited."
+
+   So glass lives on chrome that floats over content — toolbar, sidebar source
+   list, popovers, menus, floating transport — and never on the preview canvas,
+   the timeline surface, clips, or as a full-window background.
+   ========================================================================= */
+
+/* ── Tokens ──────────────────────────────────────────────────────────────
+   Apple system colours, light appearance. macOS is a mouse-precision,
+   information-dense platform, so type and spacing are tighter than the iOS
+   scale in the same skill (iOS body 17px would waste a video editor's space).
+   ------------------------------------------------------------------------ */
+:root {
+    --mac-blue: #007AFF;
+    --mac-green: #34C759;
+    --mac-orange: #FF9500;
+    --mac-red: #FF3B30;
+    --mac-purple: #AF52DE;
+    --mac-teal: #5AC8FA;
+    --mac-yellow: #FFCC00;
+
+    --mac-gray: #8E8E93;
+    --mac-gray2: #AEAEB2;
+    --mac-gray3: #C7C7CC;
+    --mac-gray4: #D1D1D6;
+    --mac-gray5: #E5E5EA;
+    --mac-gray6: #F2F2F7;
+
+    /* Labels */
+    --label-1: #000000;
+    --label-2: rgba(60, 60, 67, 0.62);
+    --label-3: rgba(60, 60, 67, 0.34);
+    --label-4: rgba(60, 60, 67, 0.20);
+
+    /* Window / content surfaces */
+    --win-bg: #ECECEE;
+    --content-bg: #FFFFFF;
+    --content-bg-2: #F7F7F9;
+    --control-bg: #FFFFFF;
+    --control-bg-hover: #F0F0F3;
+    --control-stroke: rgba(0, 0, 0, 0.14);
+
+    --separator: rgba(60, 60, 67, 0.20);
+    --separator-strong: rgba(60, 60, 67, 0.32);
+
+    /* Editing surfaces stay opaque and dark — content, never chrome. */
+    --stage-bg: #1C1C1E;
+    --timeline-bg: #F2F2F4;
+    --timeline-track: #FFFFFF;
+    --timeline-track-alt: #FAFAFC;
+    --timeline-ruler: #EDEDEF;
+
+    /* Liquid Glass materials (chrome only) */
+    --glass-thick: rgba(255, 255, 255, 0.62);
+    --glass-regular: rgba(255, 255, 255, 0.50);
+    --glass-thin: rgba(255, 255, 255, 0.38);
+    --glass-stroke: rgba(255, 255, 255, 0.55);
+    --glass-shadow: 0 10px 30px rgba(0, 0, 0, 0.16);
+    --glass-blur: 30px;
+    --glass-sat: 180%;
+
+    /* macOS type ramp for a pro app */
+    --font-ui: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display',
+               'Helvetica Neue', 'Inter', system-ui, sans-serif;
+    --font-mono: 'SF Mono', SFMono-Regular, ui-monospace, Menlo, Monaco, monospace;
+    --t-mini: 10px;
+    --t-caption: 11px;
+    --t-label: 12px;
+    --t-body: 13px;
+    --t-title: 15px;
+    --t-large: 20px;
+
+    /* 8pt grid, macOS density */
+    --s1: 4px;  --s2: 8px;  --s3: 12px; --s4: 16px; --s5: 20px; --s6: 24px;
+
+    /* Concentric radii: inner + padding = outer */
+    --r-sm: 5px;
+    --r-md: 8px;
+    --r-lg: 12px;
+    --r-xl: 16px;
+
+    --ease-out: cubic-bezier(0, 0, 0.58, 1);
+    --ease-spring: cubic-bezier(0.175, 0.885, 0.32, 1.10);
+    --d-instant: 100ms;
+    --d-fast: 180ms;
+    --d-normal: 260ms;
+
+    --sidebar-w: 248px;
+    --inspector-w: 288px;
+    --toolbar-h: 52px;
+}
+
+/* Dark appearance. Not an inversion of the Windows palette — Apple's own
+   dark system values, with the editing surfaces going darker still. */
+:root.mac-dark {
+    --mac-blue: #0A84FF;
+    --mac-green: #30D158;
+    --mac-orange: #FF9F0A;
+    --mac-red: #FF453A;
+    --mac-purple: #BF5AF2;
+    --mac-teal: #64D2FF;
+    --mac-yellow: #FFD60A;
+
+    --mac-gray: #8E8E93;
+    --mac-gray2: #636366;
+    --mac-gray3: #48484A;
+    --mac-gray4: #3A3A3C;
+    --mac-gray5: #2C2C2E;
+    --mac-gray6: #1C1C1E;
+
+    --label-1: #FFFFFF;
+    --label-2: rgba(235, 235, 245, 0.62);
+    --label-3: rgba(235, 235, 245, 0.34);
+    --label-4: rgba(235, 235, 245, 0.20);
+
+    --win-bg: #1E1E20;
+    --content-bg: #252528;
+    --content-bg-2: #2C2C2F;
+    --control-bg: #37373B;
+    --control-bg-hover: #414146;
+    --control-stroke: rgba(255, 255, 255, 0.12);
+
+    --separator: rgba(255, 255, 255, 0.14);
+    --separator-strong: rgba(255, 255, 255, 0.22);
+
+    --stage-bg: #131315;
+    --timeline-bg: #202023;
+    --timeline-track: #2A2A2E;
+    --timeline-track-alt: #262629;
+    --timeline-ruler: #1B1B1E;
+
+    --glass-thick: rgba(40, 40, 44, 0.72);
+    --glass-regular: rgba(40, 40, 44, 0.58);
+    --glass-thin: rgba(40, 40, 44, 0.44);
+    --glass-stroke: rgba(255, 255, 255, 0.10);
+    --glass-shadow: 0 12px 34px rgba(0, 0, 0, 0.46);
+}
+
+/* ── Glass material ─────────────────────────────────────────────────────── */
+.mac-glass {
+    background: var(--glass-regular);
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+    backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+}
+.mac-glass-thick {
+    background: var(--glass-thick);
+    -webkit-backdrop-filter: blur(40px) saturate(200%);
+    backdrop-filter: blur(40px) saturate(200%);
+}
+
+/* Fallbacks the skill requires: no backdrop-filter support, and users who
+   have asked the system for less transparency. Both go fully opaque. */
+@supports not (backdrop-filter: blur(1px)) {
+    .mac-glass, .mac-glass-thick { background: var(--content-bg); }
+}
+@media (prefers-reduced-transparency: reduce) {
+    .mac-glass, .mac-glass-thick {
+        background: var(--content-bg);
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
+    }
+}
+
+/* ── Shell ──────────────────────────────────────────────────────────────── */
+html, body {
+    height: 100%;
+    margin: 0;
+    overflow: hidden;
+}
+body.mac {
+    font-family: var(--font-ui);
+    font-size: var(--t-body);
+    color: var(--label-1);
+    background: var(--win-bg);
+    -webkit-font-smoothing: antialiased;
+}
+
+.mac-shell {
+    display: grid;
+    grid-template-rows: auto var(--toolbar-h) minmax(0, 1fr) auto;
+    height: 100vh;
+}
+
+/* Menu bar — macOS puts every command here first. */
+.mac-menubar {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    height: 26px;
+    padding: 0 var(--s2);
+    border-bottom: 0.5px solid var(--separator);
+    background: var(--glass-thick);
+    -webkit-backdrop-filter: blur(40px) saturate(200%);
+    backdrop-filter: blur(40px) saturate(200%);
+    position: relative;
+    z-index: 60;
+}
+.mac-menubar .mac-appname {
+    font-size: var(--t-label);
+    font-weight: 700;
+    padding: 0 var(--s2) 0 var(--s1);
+}
+.mac-menu-title {
+    font: inherit;
+    font-size: var(--t-label);
+    color: var(--label-1);
+    background: none;
+    border: none;
+    padding: 3px var(--s2);
+    border-radius: var(--r-sm);
+    cursor: default;
+}
+.mac-menu-title:hover { background: var(--control-bg-hover); }
+.mac-menu-title[aria-expanded="true"] { background: var(--mac-blue); color: #fff; }
+
+/* Toolbar — glass, because it floats above the workspace. */
+.mac-toolbar {
+    display: flex;
+    align-items: center;
+    gap: var(--s3);
+    padding: 0 var(--s3);
+    border-bottom: 0.5px solid var(--separator);
+    background: var(--glass-regular);
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+    backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+    position: relative;
+    z-index: 50;
+}
+.mac-toolbar-group {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 0 var(--s2);
+    position: relative;
+}
+.mac-toolbar-group + .mac-toolbar-group::before {
+    content: '';
+    position: absolute;
+    left: calc(var(--s2) * -1);
+    top: 50%;
+    transform: translateY(-50%);
+    width: 1px;
+    height: 20px;
+    background: var(--separator);
+}
+.mac-toolbar-spacer { flex: 1; }
+
+/* macOS toolbar buttons are bordered rectangles, not iOS capsules. */
+.mac-tb {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1px;
+    min-width: 34px;
+    height: 38px;
+    padding: 0 var(--s2);
+    border: none;
+    border-radius: var(--r-md);
+    background: transparent;
+    color: var(--label-1);
+    cursor: default;
+    transition: background var(--d-instant) var(--ease-out);
+}
+.mac-tb:hover { background: var(--control-bg-hover); }
+.mac-tb:active { background: var(--separator); }
+.mac-tb:disabled { opacity: 0.32; }
+.mac-tb .sym { font-size: 17px; line-height: 1; }
+.mac-tb .cap { font-size: var(--t-mini); color: var(--label-2); letter-spacing: 0.01em; }
+.mac-tb.is-on { background: color-mix(in srgb, var(--mac-blue) 16%, transparent); color: var(--mac-blue); }
+.mac-tb.is-on .cap { color: var(--mac-blue); }
+
+/* Primary action keeps a filled treatment — Share/Export. */
+.mac-tb-primary {
+    flex-direction: row;
+    gap: var(--s1);
+    height: 26px;
+    padding: 0 var(--s3);
+    background: var(--mac-blue);
+    color: #fff;
+    font-size: var(--t-label);
+    font-weight: 600;
+    border-radius: var(--r-sm);
+}
+.mac-tb-primary:hover { background: color-mix(in srgb, var(--mac-blue) 88%, #000); }
+.mac-tb-primary .sym { font-size: 14px; }
+
+/* ── Body: sidebar | stage | inspector ──────────────────────────────────── */
+.mac-body {
+    display: grid;
+    grid-template-columns: var(--sidebar-w) minmax(0, 1fr) var(--inspector-w);
+    min-height: 0;
+    background: var(--win-bg);
+}
+.mac-body.no-sidebar { grid-template-columns: 0 minmax(0, 1fr) var(--inspector-w); }
+.mac-body.no-inspector { grid-template-columns: var(--sidebar-w) minmax(0, 1fr) 0; }
+.mac-body.no-sidebar.no-inspector { grid-template-columns: 0 minmax(0, 1fr) 0; }
+
+/* Sidebar — the HIG calls for a translucent source list on macOS. */
+.mac-sidebar {
+    grid-column: 1;
+    min-width: 0;
+    overflow: hidden auto;
+    border-right: 0.5px solid var(--separator);
+    background: var(--glass-thin);
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+    backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+    transition: opacity var(--d-fast) var(--ease-out);
+}
+.mac-body.no-sidebar .mac-sidebar { opacity: 0; pointer-events: none; }
+
+.mac-sb-section { padding: var(--s2) 0 var(--s1); }
+.mac-sb-header {
+    display: flex;
+    align-items: center;
+    gap: var(--s1);
+    width: 100%;
+    padding: var(--s1) var(--s3);
+    border: none;
+    background: none;
+    color: var(--label-2);
+    font: inherit;
+    font-size: var(--t-caption);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    cursor: default;
+}
+.mac-sb-header .tw {
+    font-size: 12px;
+    transition: transform var(--d-fast) var(--ease-out);
+}
+.mac-sb-header[aria-expanded="false"] .tw { transform: rotate(-90deg); }
+.mac-sb-list { list-style: none; margin: 0; padding: 0 var(--s2); }
+
+/* Compact but readable rows; 28px is the macOS source-list rhythm. */
+.mac-sb-row {
+    display: flex;
+    align-items: center;
+    gap: var(--s2);
+    height: 28px;
+    padding: 0 var(--s2);
+    border-radius: var(--r-sm);
+    color: var(--label-1);
+    font-size: var(--t-label);
+    cursor: default;
+    user-select: none;
+}
+.mac-sb-row:hover { background: var(--control-bg-hover); }
+.mac-sb-row[aria-selected="true"] { background: var(--mac-blue); color: #fff; }
+.mac-sb-row[aria-selected="true"] .sub,
+.mac-sb-row[aria-selected="true"] .sym { color: rgba(255, 255, 255, 0.85); }
+.mac-sb-row .sym { font-size: 15px; color: var(--mac-blue); flex: none; }
+.mac-sb-row .nm {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.mac-sb-row .sub { font-size: var(--t-mini); color: var(--label-2); font-variant-numeric: tabular-nums; }
+.mac-sb-row.dragging { opacity: 0.4; }
+.mac-sb-empty {
+    padding: var(--s3);
+    color: var(--label-3);
+    font-size: var(--t-caption);
+    text-align: center;
+}
+
+/* ── Stage: preview over timeline ───────────────────────────────────────── */
+.mac-stage {
+    grid-column: 2;
+    display: grid;
+    /* The single column must be allowed to shrink. Left as the default `auto`
+       it sizes to max-content, so the timeline's intrinsic width (track heads
+       plus the full zoomed lane width) widened the stage and pushed the
+       preview underneath the inspector. */
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto;
+    min-width: 0;
+    min-height: 0;
+}
+
+/* Deference: the frame is the hero. Opaque dark surface, minimal chrome,
+   no glass over the picture. */
+.mac-preview {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 0;
+    padding: var(--s4);
+    background: var(--stage-bg);
+    overflow: hidden;
+}
+.mac-preview canvas {
+    max-width: 100%;
+    max-height: 100%;
+    border-radius: var(--r-sm);
+    box-shadow: 0 2px 18px rgba(0, 0, 0, 0.4);
+    background: #000;
+}
+
+/* Floating transport — glass is right here: it hovers over the picture. */
+.mac-transport {
+    position: absolute;
+    bottom: var(--s4);
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: var(--s1);
+    padding: var(--s1) var(--s2);
+    border-radius: var(--r-lg);
+    border: 0.5px solid var(--glass-stroke);
+    background: var(--glass-thick);
+    -webkit-backdrop-filter: blur(30px) saturate(190%);
+    backdrop-filter: blur(30px) saturate(190%);
+    box-shadow: var(--glass-shadow);
+    opacity: 0;
+    transition: opacity var(--d-fast) var(--ease-out);
+}
+.mac-preview:hover .mac-transport,
+.mac-transport:focus-within { opacity: 1; }
+.mac-tp {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border: none;
+    border-radius: var(--r-sm);
+    background: none;
+    color: var(--label-1);
+    cursor: default;
+}
+.mac-tp:hover { background: var(--control-bg-hover); }
+.mac-tp .sym { font-size: 18px; }
+.mac-tp-play .sym { font-size: 22px; }
+.mac-timecode {
+    padding: 0 var(--s2);
+    font-family: var(--font-mono);
+    font-size: var(--t-caption);
+    font-variant-numeric: tabular-nums;
+    color: var(--label-2);
+}
+
+/* ── Timeline — opaque, dense, no glass. ────────────────────────────────── */
+.mac-timeline {
+    display: flex;
+    flex-direction: column;
+    height: 268px;
+    min-height: 148px;
+    min-width: 0;
+    border-top: 0.5px solid var(--separator);
+    background: var(--timeline-bg);
+    /* Paint containment: timeline redraws must not invalidate the shell. */
+    contain: layout paint;
+}
+.mac-tl-bar {
+    display: flex;
+    align-items: center;
+    gap: var(--s2);
+    height: 30px;
+    padding: 0 var(--s2);
+    border-bottom: 0.5px solid var(--separator);
+}
+.mac-tl-bar .grow { flex: 1; }
+.mac-seg {
+    display: inline-flex;
+    padding: 1px;
+    border-radius: var(--r-sm);
+    background: var(--control-bg-hover);
+}
+.mac-seg button {
+    border: none;
+    background: none;
+    font: inherit;
+    font-size: var(--t-caption);
+    color: var(--label-1);
+    padding: 2px var(--s2);
+    border-radius: 4px;
+    cursor: default;
+}
+.mac-seg button[aria-pressed="true"] {
+    background: var(--control-bg);
+    box-shadow: 0 0.5px 2px rgba(0, 0, 0, 0.18);
+}
+
+.mac-tl-scroll {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    overflow: auto;
+    position: relative;
+}
+.mac-tl-heads {
+    position: sticky;
+    left: 0;
+    z-index: 3;
+    width: 132px;
+    flex: none;
+    background: var(--timeline-bg);
+    border-right: 0.5px solid var(--separator);
+}
+.mac-tl-lanes { position: relative; flex: 1; min-width: 0; }
+
+.mac-tl-ruler {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    height: 22px;
+    background: var(--timeline-ruler);
+    border-bottom: 0.5px solid var(--separator);
+}
+.mac-tl-ruler canvas { display: block; height: 22px; }
+.mac-tl-headspacer {
+    height: 22px;
+    border-bottom: 0.5px solid var(--separator);
+    background: var(--timeline-ruler);
+}
+
+.mac-tl-head {
+    display: flex;
+    align-items: center;
+    gap: var(--s1);
+    height: 46px;
+    padding: 0 var(--s2);
+    border-bottom: 0.5px solid var(--separator);
+    font-size: var(--t-caption);
+    color: var(--label-1);
+}
+.mac-tl-head .sym { font-size: 14px; color: var(--label-2); }
+.mac-tl-head .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mac-tl-head button {
+    border: none;
+    background: none;
+    color: var(--label-2);
+    cursor: default;
+    padding: 2px;
+    border-radius: 4px;
+    display: inline-flex;
+}
+.mac-tl-head button:hover { background: var(--control-bg-hover); color: var(--label-1); }
+.mac-tl-head button .sym { font-size: 13px; }
+
+.mac-tl-lane {
+    position: relative;
+    height: 46px;
+    border-bottom: 0.5px solid var(--separator);
+    background: var(--timeline-track);
+}
+.mac-tl-lane:nth-child(even) { background: var(--timeline-track-alt); }
+.mac-tl-lane.drop-ok { box-shadow: inset 0 0 0 2px var(--mac-blue); }
+
+/* Clips: flat, opaque, cheap. No backdrop-filter — there can be hundreds. */
+.mac-clip {
+    position: absolute;
+    top: 4px;
+    height: 38px;
+    border-radius: var(--r-sm);
+    border: 1px solid rgba(0, 0, 0, 0.16);
+    background: var(--clip-bg, #6E9BE8);
+    color: #fff;
+    overflow: hidden;
+    cursor: default;
+    user-select: none;
+    display: flex;
+    align-items: center;
+    padding: 0 var(--s1);
+}
+.mac-clip .lbl {
+    font-size: var(--t-mini);
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    pointer-events: none;
+    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.28);
+}
+.mac-clip[aria-selected="true"] {
+    outline: 2px solid var(--mac-blue);
+    outline-offset: -1px;
+    z-index: 2;
+}
+.mac-clip .trim {
+    position: absolute;
+    top: 0;
+    width: 7px;
+    height: 100%;
+    cursor: ew-resize;
+}
+.mac-clip .trim-l { left: 0; }
+.mac-clip .trim-r { right: 0; }
+.mac-clip:hover .trim { background: rgba(255, 255, 255, 0.28); }
+
+.mac-playhead {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background: var(--mac-red);
+    pointer-events: none;
+    z-index: 4;
+}
+.mac-playhead::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -5px;
+    width: 11px;
+    height: 11px;
+    clip-path: polygon(0 0, 100% 0, 50% 100%);
+    background: var(--mac-red);
+}
+
+/* ── Inspector ──────────────────────────────────────────────────────────── */
+.mac-inspector {
+    grid-column: 3;
+    min-width: 0;
+    overflow: hidden auto;
+    border-left: 0.5px solid var(--separator);
+    background: var(--content-bg);
+    transition: opacity var(--d-fast) var(--ease-out);
+}
+.mac-body.no-inspector .mac-inspector { opacity: 0; pointer-events: none; }
+
+/* The one glass surface in the inspector: its sticky header. */
+.mac-insp-head {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    padding: var(--s3);
+    border-bottom: 0.5px solid var(--separator);
+    background: var(--glass-thick);
+    -webkit-backdrop-filter: blur(30px) saturate(190%);
+    backdrop-filter: blur(30px) saturate(190%);
+}
+.mac-insp-title { font-size: var(--t-title); font-weight: 700; letter-spacing: -0.01em; }
+.mac-insp-sub { font-size: var(--t-caption); color: var(--label-2); margin-top: 1px; }
+
+.mac-insp-empty {
+    padding: var(--s6) var(--s4);
+    text-align: center;
+    color: var(--label-3);
+}
+.mac-insp-empty .sym { font-size: 32px; display: block; margin-bottom: var(--s2); }
+.mac-insp-empty p { margin: 0; font-size: var(--t-label); }
+
+.mac-group { border-bottom: 0.5px solid var(--separator); }
+.mac-group-head {
+    display: flex;
+    align-items: center;
+    gap: var(--s1);
+    width: 100%;
+    padding: var(--s2) var(--s3);
+    border: none;
+    background: none;
+    color: var(--label-2);
+    font: inherit;
+    font-size: var(--t-caption);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    cursor: default;
+}
+.mac-group-head .tw { font-size: 12px; transition: transform var(--d-fast) var(--ease-out); }
+.mac-group-head[aria-expanded="false"] .tw { transform: rotate(-90deg); }
+.mac-group-body { padding: 0 var(--s3) var(--s3); display: grid; gap: var(--s2); }
+.mac-group-head[aria-expanded="false"] + .mac-group-body { display: none; }
+
+/* Right-aligned value + label rows: the macOS inspector rhythm. */
+.mac-field { display: grid; grid-template-columns: 84px 1fr; align-items: center; gap: var(--s2); }
+.mac-field > label { font-size: var(--t-label); color: var(--label-2); text-align: right; }
+.mac-field .val { font-size: var(--t-caption); color: var(--label-2); font-variant-numeric: tabular-nums; }
+
+.mac-input, .mac-select {
+    width: 100%;
+    box-sizing: border-box;
+    height: 21px;
+    padding: 0 var(--s1);
+    font: inherit;
+    font-size: var(--t-label);
+    color: var(--label-1);
+    background: var(--control-bg);
+    border: 1px solid var(--control-stroke);
+    border-radius: var(--r-sm);
+}
+.mac-input:focus, .mac-select:focus {
+    outline: none;
+    border-color: var(--mac-blue);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--mac-blue) 25%, transparent);
+}
+.mac-range { width: 100%; accent-color: var(--mac-blue); }
+.mac-row2 { display: flex; align-items: center; gap: var(--s2); }
+
+/* ── Menus, popovers, sheets ────────────────────────────────────────────── */
+.mac-popover {
+    position: fixed;
+    z-index: 400;
+    min-width: 200px;
+    padding: var(--s1);
+    border-radius: var(--r-lg);
+    border: 0.5px solid var(--glass-stroke);
+    background: var(--glass-thick);
+    -webkit-backdrop-filter: blur(40px) saturate(200%);
+    backdrop-filter: blur(40px) saturate(200%);
+    box-shadow: var(--glass-shadow);
+    color: var(--label-1);
+}
+.mac-mi {
+    display: flex;
+    align-items: center;
+    gap: var(--s2);
+    width: 100%;
+    padding: 5px var(--s2);
+    border: none;
+    background: none;
+    color: inherit;
+    font: inherit;
+    font-size: var(--t-label);
+    text-align: left;
+    border-radius: var(--r-sm);
+    cursor: default;
+}
+.mac-mi:hover:not(:disabled) { background: var(--mac-blue); color: #fff; }
+.mac-mi:hover:not(:disabled) .key { color: rgba(255, 255, 255, 0.8); }
+.mac-mi:disabled { color: var(--label-3); }
+.mac-mi .nm { flex: 1; }
+.mac-mi .key { color: var(--label-2); font-size: var(--t-caption); font-variant-numeric: tabular-nums; }
+.mac-msep { height: 0.5px; margin: var(--s1) var(--s2); background: var(--separator-strong); }
+
+/* Sheets drop from the top of the window, as on macOS. */
+.mac-sheet-scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 500;
+    background: rgba(0, 0, 0, 0.22);
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+}
+.mac-sheet {
+    margin-top: 0;
+    width: min(460px, 92vw);
+    padding: var(--s5);
+    border-radius: 0 0 var(--r-xl) var(--r-xl);
+    background: var(--content-bg);
+    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.34);
+    animation: mac-sheet-in var(--d-normal) var(--ease-out);
+}
+@keyframes mac-sheet-in { from { transform: translateY(-14px); opacity: 0.6; } }
+.mac-sheet h2 { margin: 0 0 var(--s2); font-size: var(--t-title); }
+.mac-sheet p { margin: 0 0 var(--s4); font-size: var(--t-body); color: var(--label-2); }
+.mac-sheet-actions { display: flex; justify-content: flex-end; gap: var(--s2); }
+
+/* macOS push buttons: bordered rectangles. */
+.mac-btn {
+    height: 22px;
+    padding: 0 var(--s3);
+    font: inherit;
+    font-size: var(--t-label);
+    color: var(--label-1);
+    background: var(--control-bg);
+    border: 1px solid var(--control-stroke);
+    border-radius: var(--r-sm);
+    cursor: default;
+}
+.mac-btn:hover { background: var(--control-bg-hover); }
+.mac-btn-default { background: var(--mac-blue); border-color: transparent; color: #fff; font-weight: 600; }
+.mac-btn-default:hover { background: color-mix(in srgb, var(--mac-blue) 88%, #000); }
+
+/* ── Status bar ─────────────────────────────────────────────────────────── */
+.mac-status {
+    display: flex;
+    align-items: center;
+    gap: var(--s4);
+    height: 24px;
+    padding: 0 var(--s3);
+    border-top: 0.5px solid var(--separator);
+    background: var(--content-bg-2);
+    font-size: var(--t-caption);
+    color: var(--label-2);
+}
+.mac-status .grow { flex: 1; }
+.mac-status b { font-weight: 600; color: var(--label-1); font-variant-numeric: tabular-nums; }
+
+/* ── Focus, accessibility ───────────────────────────────────────────────── */
+:focus-visible {
+    outline: 3px solid color-mix(in srgb, var(--mac-blue) 55%, transparent);
+    outline-offset: 1px;
+    border-radius: var(--r-sm);
+}
+.mac-sr {
+    position: absolute;
+    width: 1px; height: 1px;
+    margin: -1px; padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+}
+
+/* Reduced motion: keep state changes, drop the movement. */
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+    .mac-transport { opacity: 1; }
+}
+
+/* ── Responsive Mac window sizes (desktop throughout — never mobile) ─────── */
+@media (max-width: 1280px) {
+    :root { --sidebar-w: 216px; --inspector-w: 264px; }
+}
+@media (max-width: 1100px) {
+    :root { --sidebar-w: 196px; --inspector-w: 240px; }
+    .mac-tb .cap { display: none; }
+    .mac-tb { height: 30px; min-width: 30px; }
+}
+@media (max-width: 940px) {
+    /* Narrow Mac window: the sidebar yields first, as in Final Cut and Xcode.
+       This is still a desktop layout — no drawers, no mobile patterns. */
+    .mac-body { grid-template-columns: 0 minmax(0, 1fr) var(--inspector-w); }
+    .mac-sidebar { opacity: 0; pointer-events: none; }
+    .mac-timeline { height: 210px; }
+}
+@media (max-height: 720px) {
+    .mac-timeline { height: 196px; }
+}

@@ -76,8 +76,14 @@ ribbon scaling and the Ribbon Display Options menu.
 
 ### Known debt
 
-Two files in `platform/windows/editor/` contain no Windows-specific DOM at all
-and are the first candidates to move into the shared engine:
+`platform/windows/editor/` is shared behaviour wearing Windows rendering. The
+macOS shell consumes it (its Windows rendering no-ops when the Ribbon DOM is
+absent), which the boundary checker reports on every run as a tracked
+exception. Extracting the command layer into `engine/` is the natural next
+structural step, and would remove that exception.
+
+Two files there contain no Windows-specific DOM at all and are the first
+candidates to move into the shared engine:
 
 - `editor-render.js` (486 LOC) — canvas compositing, identical on every platform
 - `editor-clips.js` (109 LOC)
@@ -95,11 +101,21 @@ into the Android UI.
 
 ## macOS — `public/platform/macos/`
 
-Not yet built. Apple HIG and Liquid Glass: toolbar, sidebar, inspector, menus,
-popovers, sheets, SF Symbols, Command-key shortcuts, trackpad interaction.
+Built. Served at `/platform/macos/`; the Windows shell stays at `/`.
 
-Must not modify the Windows presentation layer. No Ribbon, and no converting
-Windows controls to macOS patterns.
+Apple HIG + Liquid Glass, in a menu bar + toolbar + sidebar + inspector model.
+There is no Ribbon here — that is a Windows pattern. The shell loads the shared
+engine and the shared command layer and **none** of the Windows components, so
+the Ribbon's rendering functions are simply absent rather than restyled.
+
+Liquid Glass placement follows the HIG skill's own constraint — *"When NOT to
+use Liquid Glass: Photo/video editing — glass effects compete with the content
+being edited"* — so glass sits only on chrome that floats over content (menu
+bar, toolbar, sidebar source list, floating transport, popovers, inspector
+header) and never on the preview, timeline, lanes or clips.
+
+See `public/platform/macos/README.md` for the file map, the glass audit, and
+the keyboard-ownership split between this layer and the shared handler.
 
 ## Android — `public/platform/android/`
 

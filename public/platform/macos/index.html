@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ForgeCut for macOS</title>
+
+<!--
+  ForgeCut — macOS presentation layer.
+
+  This shell loads the SHARED editor engine and the shared command layer, and
+  none of the Windows components. There is no Ribbon here: macOS uses a menu
+  bar + toolbar + sidebar + inspector model instead.
+
+  The Windows shell (public/index.html) is untouched by this file.
+-->
+
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=block" rel="stylesheet" crossorigin>
+<link rel="stylesheet" href="macos.css">
+
+<!-- Shared, platform-agnostic. Order matters: diagnostics first so it catches
+     startup failures, then utilities the engine and commands rely on. -->
+<script src="../../diagnostics.js"></script>
+<script src="../../utils.js"></script>
+<script src="../../dialogs.js"></script>
+<script src="../../papaparse.js"></script>
+<script src="../../jszip.js"></script>
+</head>
+
+<body class="mac">
+
+<div class="mac-shell" id="fc-editor-shell">
+
+  <!-- Menu bar: on macOS this is the primary home for every command. -->
+  <div class="mac-menubar" id="macMenubar" role="menubar" aria-label="ForgeCut menu bar">
+    <span class="mac-appname">ForgeCut</span>
+  </div>
+
+  <!-- Toolbar -->
+  <div class="mac-toolbar" id="macToolbar" role="toolbar" aria-label="Main toolbar"></div>
+
+  <!-- Sidebar | stage | inspector -->
+  <div class="mac-body" id="macBody">
+    <nav class="mac-sidebar" id="macSidebar" aria-label="Project sidebar"></nav>
+
+    <main class="mac-stage">
+      <section class="mac-preview" id="macPreview" aria-label="Preview">
+        <!-- Shared render target. editor-render.js composites into this exact
+             canvas id, so the macOS preview reuses the shared renderer rather
+             than introducing a second one. -->
+        <canvas id="renderCanvas" width="1920" height="1080" aria-label="Video preview"></canvas>
+
+        <div class="mac-transport" id="macTransport" role="group" aria-label="Playback controls"></div>
+      </section>
+
+      <section class="mac-timeline" id="macTimeline" aria-label="Timeline">
+        <div class="mac-tl-bar" id="macTimelineBar"></div>
+        <div class="mac-tl-scroll" id="macTimelineScroll">
+          <div class="mac-tl-heads" id="macTrackHeads"><div class="mac-tl-headspacer"></div></div>
+          <div class="mac-tl-lanes" id="macTimelineLanes">
+            <div class="mac-tl-ruler" id="macRuler"><canvas id="macRulerCanvas" height="22"></canvas></div>
+            <div id="macLanes"></div>
+            <div class="mac-playhead" id="macPlayhead" style="left:0"></div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <aside class="mac-inspector" id="macInspector" aria-label="Inspector"></aside>
+  </div>
+
+  <div class="mac-status" id="macStatus"></div>
+</div>
+
+<!--
+  The shared command layer calls updateInspector(), which writes into
+  '.inspector-section' without a null guard. That element belongs to the
+  Windows inspector. Rather than edit protected Windows code, the macOS shell
+  provides a hidden sink so those writes land harmlessly; the macOS inspector
+  renders itself from state. See platform/macos/README.md.
+-->
+<div class="inspector-section" hidden aria-hidden="true"></div>
+
+<!-- ── Shared editor engine ───────────────────────────────────────────── -->
+<script src="../../engine/MediaEngine.js"></script>
+<script src="../../engine/AudioEngine.js"></script>
+<script src="../../engine/PlaybackEngine.js"></script>
+<script src="../../engine/ShapeRenderer.js"></script>
+<script src="../../engine/TextRenderer.js"></script>
+<script src="../../engine/AnimationEngine.js"></script>
+<script src="../../engine/TransitionEngine.js"></script>
+<script src="../../engine/ExportEngine.js"></script>
+<script src="../../engine/HistoryManager.js"></script>
+<script src="../../engine/KeyboardShortcuts.js"></script>
+
+<!-- ── Shared command layer ───────────────────────────────────────────────
+     These files own project state, media import, timeline data, clip
+     commands, undo/redo wiring and export. Their Windows *rendering* is
+     inert here because the Ribbon DOM does not exist, which is exactly the
+     separation we want: shared behaviour, platform-specific presentation. -->
+<script src="../windows/editor/editor-core.js"></script>
+<script src="../windows/editor/editor-transport.js"></script>
+<script src="../windows/editor/editor-render.js"></script>
+<script src="../windows/editor/editor-timeline.js"></script>
+<script src="../windows/editor/editor-chrome.js"></script>
+<script src="../windows/editor/editor-events.js"></script>
+<script src="../windows/editor/editor-clips.js"></script>
+<script src="../windows/editor/editor-inspector.js"></script>
+<script src="../windows/editor/editor-assets.js"></script>
+<script src="../windows/editor/editor-csv.js"></script>
+<script src="../windows/editor/editor-project.js"></script>
+<script src="../windows/editor/editor-edit.js"></script>
+<script src="../windows/editor/editor-lifecycle.js"></script>
+<script src="../windows/editor/editor-interaction.js"></script>
+<script src="../windows/editor/editor-extras.js"></script>
+<script src="../windows/editor/editor-controls.js"></script>
+
+<!-- ── macOS presentation ─────────────────────────────────────────────── -->
+<script src="MacMenus.js"></script>
+<script src="MacInspector.js"></script>
+<script src="MacTimeline.js"></script>
+<script src="MacShell.js"></script>
+
+<!-- Hidden file inputs the shared import path expects. Presentation-neutral:
+     macOS surfaces them through toolbar and menu commands, not a Ribbon. -->
+<input type="file" id="mediaFileInput" accept="video/*" hidden>
+<input type="file" id="audioFileInput" accept="audio/*" hidden>
+<input type="file" id="imageFileInput" accept="image/*" hidden>
+
+</body>
+</html>
