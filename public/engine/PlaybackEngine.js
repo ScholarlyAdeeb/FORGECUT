@@ -286,11 +286,21 @@
         }
     }
 
+    /**
+     * Announce a transport state change instead of painting it.
+     *
+     * This used to write straight into the Ribbon's playPauseIcon and
+     * ribbonPlayIcon elements, which put Windows presentation inside the
+     * shared engine: every other platform would have had to either adopt
+     * those element ids or watch the engine miss its own buttons. The engine
+     * now reports what happened and each platform layer decides how to show
+     * it — see platform/windows/editor/editor-transport.js for the Ribbon's
+     * listener.
+     */
     function updateTransportUI(icon) {
-        const playIcon = document.getElementById('playPauseIcon');
-        if (playIcon) playIcon.textContent = icon;
-        const ribbonPlay = document.getElementById('ribbonPlayIcon');
-        if (ribbonPlay) ribbonPlay.textContent = icon;
+        window.dispatchEvent(new CustomEvent('forgecut:transport', {
+            detail: { icon: icon, isPlaying: !!(_state && _state.isPlaying) }
+        }));
     }
 
     function clearPool() {

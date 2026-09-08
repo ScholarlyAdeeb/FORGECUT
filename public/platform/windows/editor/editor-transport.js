@@ -67,6 +67,18 @@ function updatePlayheadUI() {
     }
 }
 
+// The Ribbon's transport icons. PlaybackEngine reports transport changes as an
+// event rather than reaching into these elements itself, so the icon ids stay
+// owned by the Windows presentation layer.
+window.addEventListener('forgecut:transport', (e) => {
+    const icon = e.detail && e.detail.icon;
+    if (!icon) return;
+    const playIcon = document.getElementById('playPauseIcon');
+    if (playIcon) playIcon.textContent = icon;
+    const ribbonPlay = document.getElementById('ribbonPlayIcon');
+    if (ribbonPlay) ribbonPlay.textContent = icon;
+});
+
 function togglePlay() {
     if (window.ForgeCut && window.ForgeCut.PlaybackEngine) {
         window.ForgeCut.PlaybackEngine.bindState(state);

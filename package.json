@@ -1,11 +1,12 @@
 {
   "name": "forgecut-web",
   "version": "1.0.0",
-  "description": "ForgeCut — browser-based multi-track video editor",
+  "description": "ForgeCut \u2014 browser-based multi-track video editor",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node server.js"
+    "dev": "node server.js",
+    "check:boundaries": "node scripts/check-platform-boundaries.js"
   },
   "keywords": [],
   "author": "",
