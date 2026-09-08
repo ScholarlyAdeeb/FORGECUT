@@ -376,10 +376,10 @@ class ForgeCutHeader extends HTMLElement {
                         <span class="material-symbols-outlined text-[24px] text-on-surface-variant">horizontal_distribute</span>
                         <span class="text-[10px] text-on-surface">Wipe</span>
                     </button>
-                    <button class="flex flex-col items-center p-1 w-16 hover:bg-surface-container-high transition-colors rounded cursor-pointer animate-in fade-in" onclick="setTransition('Morph')">
-                        <span class="material-symbols-outlined text-[24px] text-on-surface-variant">auto_fix_high</span>
-                        <span class="text-[10px] text-on-surface">Morph</span>
-                    </button>
+<!-- Morph removed: TransitionEngine.applyTransition has no case for it, so it
+                         fell through to the default branch and silently produced a hard cut.
+                         Verified by passing an invalid transition name, which rendered
+                         identically. Reinstate this button if a renderMorph is added. -->
                     <button class="flex flex-col items-center p-1 w-16 hover:bg-surface-container-high transition-colors rounded cursor-pointer animate-in fade-in" onclick="setTransition('Split')">
                         <span class="material-symbols-outlined text-[24px] text-on-surface-variant">call_split</span>
                         <span class="text-[10px] text-on-surface">Split</span>

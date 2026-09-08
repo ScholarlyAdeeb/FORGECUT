@@ -217,7 +217,9 @@
         /* Transition — reuses the shared setTransition command. */
         host.append(group('Transition', 'transition', (b) => {
             const sel = el('select', 'mac-select');
-            ['None', 'Fade', 'Dissolve', 'Push', 'Wipe', 'Morph', 'Split', 'Reveal', 'Cut'].forEach(n => {
+            // 'Morph' is deliberately absent: TransitionEngine has no case for
+            // it, so choosing it silently produced a hard cut.
+            ['None', 'Fade', 'Dissolve', 'Push', 'Wipe', 'Split', 'Reveal', 'Cut'].forEach(n => {
                 const o = el('option', null, n);
                 o.value = n;
                 if ((clip.transition || 'None') === n) o.selected = true;
