@@ -88,6 +88,9 @@ class ForgeCutBulkDrawer extends HTMLElement {
                 </div>
                 
                 <div class="flex items-center gap-2">
+                    <label for="bulkExportFormat" class="text-[10px] uppercase tracking-wide text-outline">Format</label>
+                    <select id="bulkExportFormat" title="Output format" class="bg-surface-container-highest text-white text-xs rounded border border-outline-variant/30 px-2 py-1 cursor-pointer outline-none"></select>
+                    <div class="h-4 w-px bg-outline-variant/30 mx-1"></div>
                     <button class="flex items-center gap-1 px-3 py-1 bg-transparent hover:bg-surface-container rounded text-primary border-none cursor-pointer text-xs font-semibold" onclick="exportSelectedBatch()">
                         <span class="material-symbols-outlined text-xs">download</span>
                         <span>Export Selected</span>
@@ -142,7 +145,48 @@ window.batchQueueState = {
     // second of output. startBatchGenerate sets this from the real clip length.
     averageRenderTime: 30.0,
     // rowIndex -> { index, name, blob } for every variation actually rendered.
-    outputs: new Map()
+    outputs: new Map(),
+    // Chosen export preset, resolved to a real backend by CapabilityRegistry.
+    preset: 'web-compat',
+    // Handle for the export currently running, so Cancel can stop it.
+    current: null
+};
+
+/**
+ * Fill the format picker from what this environment can ACTUALLY produce.
+ *
+ * The list is not hardcoded: it comes from CapabilityRegistry, which probes
+ * the server encoder, ffmpeg.wasm and MediaRecorder at runtime. A preset no
+ * reachable backend can deliver is shown disabled with the reason attached,
+ * rather than being offered and then silently producing the wrong container.
+ */
+window.populateExportFormats = async function() {
+    const sel = document.getElementById('bulkExportFormat');
+    if (!sel) return;
+    const CR = window.ForgeCut && window.ForgeCut.CapabilityRegistry;
+    if (!CR) return;
+
+    const previous = sel.value;
+    await CR.probe();
+    const presets = CR.availablePresets();
+    sel.replaceChildren();
+
+    presets.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p.name;
+        opt.textContent = p.available ? p.label : `${p.label} (unavailable)`;
+        opt.disabled = !p.available;
+        opt.title = p.available
+            ? `${p.description} — via ${p.direct ? 'direct capture' : p.backend}`
+            : (p.advice || 'Not supported in this environment.');
+        sel.appendChild(opt);
+    });
+
+    const stillThere = presets.some(p => p.name === previous && p.available);
+    const firstUsable = presets.find(p => p.available);
+    sel.value = stillThere ? previous : (firstUsable ? firstUsable.name : '');
+    window.batchQueueState.preset = sel.value;
+    sel.onchange = () => { window.batchQueueState.preset = sel.value; };
 };
 
 window.openBulkDrawer = function() {
@@ -151,6 +195,7 @@ window.openBulkDrawer = function() {
         drawer.style.height = '380px';
         window.initBatchJobs();
         window.updateBulkDrawerList();
+        window.populateExportFormats();
         window.startCpuGpuSimulation();
     }
 };
@@ -372,8 +417,9 @@ window.startBatchGenerate = async function(all = false) {
  */
 window.runBatchQueue = async function() {
     const qs = window.batchQueueState;
-    const engine = window.ForgeCut && window.ForgeCut.ExportEngine;
-    if (!engine) return;
+    const P = window.ForgeCut && window.ForgeCut.ExportPipeline;
+    const EC = window.ForgeCut && window.ForgeCut.ExportConfig;
+    if (!P || !EC) return;
     const canvasEl = document.getElementById('renderCanvas');
 
     while (qs.isRunning && !qs.isPaused) {
@@ -387,18 +433,37 @@ window.runBatchQueue = async function() {
         let lastPaint = 0;
         let thumbTaken = false;
 
-        const result = await engine.exportBatch(state, renderCanvasComposition, {
-            canvas: canvasEl,
-            fps: job.fps || 30,
-            indices: [job.id],
-            autoDownload: false,
-            hooks: {
-                onJobProgress: (rowIndex, p) => {
-                    job.progress = Math.round(p * 100);
-                    // Grab the thumbnail mid-render, while the canvas still holds
-                    // THIS row's composition: exportBatch restores the previously
-                    // selected row before it returns.
-                    if (!thumbTaken && p >= 0.5 && canvasEl) {
+        // Each variation is rendered by selecting its CSV row and running the
+        // full export pipeline, so a batch produces the SAME real container the
+        // single-export path does rather than the WebM the old engine always
+        // emitted regardless of the chosen format.
+        const previousRow = state.selectedRowIndex;
+        window.selectRow(job.id);
+
+        // Name the file from the row's first column, the way a user would
+        // expect. The display name is left untouched; only the filename is
+        // sanitised, and duplicates are resolved when the ZIP is built.
+        let rowName = `variation_${job.variationNumber}`;
+        try {
+            const row = state.csvData && state.csvData[job.id];
+            if (row) {
+                const first = Object.keys(row)[0];
+                if (first && row[first]) rowName = String(row[first]);
+            }
+        } catch (e) { /* fall back to the variation number */ }
+
+        try {
+            const result = await P.runExport(state, renderCanvasComposition, {
+                canvas: canvasEl,
+                preset: qs.preset || 'web-compat',
+                name: rowName,
+                fps: job.fps || 30,
+                duration: state.duration,
+                onJob: (handle) => { qs.current = handle; },
+                onUpdate: ({ job: view }) => {
+                    job.progress = Math.round((view.progress || 0) * 100);
+                    job.stage = view.stage;
+                    if (!thumbTaken && view.progress >= 0.4 && canvasEl) {
                         thumbTaken = true;
                         job.thumbnail = canvasEl.toDataURL('image/jpeg', 0.25);
                     }
@@ -408,25 +473,31 @@ window.runBatchQueue = async function() {
                         updateJobProgressCell(job);
                     }
                 }
-            }
-        });
+            });
 
-        if (!qs.isRunning) break; // cancelled mid-render; statuses already set
+            qs.current = null;
+            state.selectedRowIndex = previousRow;
+            if (!qs.isRunning) break; // cancelled mid-render; statuses already set
 
-        const output = result.blobs[0];
-        if (output) {
             job.progress = 100;
             job.status = 'Completed';
-            qs.outputs.set(job.id, output);
-        } else if (result.cancelled) {
-            job.status = 'Cancelled';
-            job.progress = 0;
-        } else {
-            const failure = result.failures[0];
+            job.backend = result.backend;
+            job.validation = result.validation;
+            qs.outputs.set(job.id, {
+                index: job.id,
+                name: result.filename || EC.sanitiseFilename(rowName, EC.CONTAINERS[result.config.container].ext),
+                blob: result.blob
+            });
+        } catch (e) {
+            qs.current = null;
+            state.selectedRowIndex = previousRow;
+            if (e && e.code === 'ECANCELLED') {
+                job.status = 'Cancelled';
+                job.progress = 0;
+                break;
+            }
             job.status = 'Failed';
-            job.error = failure
-                ? String((failure.error && failure.error.message) || failure.error)
-                : 'Render failed';
+            job.error = (e && e.message) ? e.message : String(e);
         }
         window.updateBulkDrawerList();
     }
@@ -465,7 +536,13 @@ window.cancelBatchQueue = function() {
     if (window.batchQueueState.isRunning) {
         window.batchQueueState.isRunning = false;
         window.batchQueueState.isPaused = false;
-        // Abort the render in flight too, not just the queue that schedules them.
+        // Abort the export in flight too, not just the queue that schedules
+        // them. The pipeline handle stops the capture, aborts the upload and
+        // kills the server's FFmpeg process.
+        if (window.batchQueueState.current) {
+            try { window.batchQueueState.current.cancel(); } catch (e) { /* already gone */ }
+            window.batchQueueState.current = null;
+        }
         if (window.ForgeCut && window.ForgeCut.ExportEngine) {
             window.ForgeCut.ExportEngine.cancelExport();
         }
@@ -497,9 +574,19 @@ window.retryFailedBatch = function() {
 function collectRenderedOutputs(pick) {
     const outputs = window.batchQueueState.outputs;
     if (!state.batchJobs) return [];
-    return state.batchJobs
+    const entries = state.batchJobs
         .filter(j => j.status === 'Completed' && pick(j) && outputs.has(j.id))
         .map(j => outputs.get(j.id));
+
+    // Two CSV rows can easily share a first column, and a duplicate entry name
+    // silently overwrites inside a ZIP. Uniquify at packaging time so the
+    // stored display names are left alone.
+    const EC = window.ForgeCut && window.ForgeCut.ExportConfig;
+    if (EC && entries.length > 1) {
+        const unique = EC.dedupeFilenames(entries.map(e => e.name));
+        return entries.map((e, i) => ({ index: e.index, name: unique[i], blob: e.blob }));
+    }
+    return entries;
 }
 
 window.exportSelectedBatch = async function() {

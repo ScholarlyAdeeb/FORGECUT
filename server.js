@@ -119,10 +119,14 @@ process.on('unhandledRejection', (reason) => {
 
 // Reap temp directories from jobs the client abandoned, and any left behind by
 // a previous process that did not shut down cleanly.
-const sweepTimer = setInterval(() => {
+const sweepExports = () =>
     exportService.sweep().catch(err => console.error('[ForgeCut] export sweep failed:', err && err.message));
-}, 10 * 60 * 1000);
+const sweepTimer = setInterval(sweepExports, 10 * 60 * 1000);
 sweepTimer.unref();
+// Also sweep once at boot: the interval alone leaves directories orphaned by a
+// previous process sitting on disk for the first ten minutes after a restart,
+// and an abandoned export can be gigabytes.
+sweepExports();
 
 const server = app.listen(PORT, () => {
     console.log(`ForgeCut running at http://localhost:${PORT}`);

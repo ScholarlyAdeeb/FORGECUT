@@ -355,28 +355,187 @@
     };
 
     /**
-     * macOS share/export. A sheet that states what will be produced and lets
-     * the user confirm, then hands off to the SAME shared export command the
-     * Windows Export button uses — no second export path.
+     * macOS share/export.
+     *
+     * This used to hand off to `startBulkExport`, which opens the WINDOWS bulk
+     * drawer — a component the macOS shell does not load. Export on macOS
+     * therefore threw "window.openBulkDrawer is not a function" and did
+     * nothing. The fix is a macOS presentation over the SHARED pipeline, not
+     * loading a Windows component here: the sheet and progress are local, while
+     * every encoding decision belongs to ForgeCut.ExportPipeline.
      */
     Mac.exportSheet = async function () {
         const s = window.state;
+        const P = window.ForgeCut && window.ForgeCut.ExportPipeline;
+        const EC = window.ForgeCut && window.ForgeCut.ExportConfig;
+        const CR = window.ForgeCut && window.ForgeCut.CapabilityRegistry;
+
         const clips = (s.tracks || []).reduce((n, t) => n + (t.clips || []).length, 0);
         if (!clips) {
             Mac.sheet('Add at least one clip to the timeline before exporting.',
                 { title: 'Nothing to Export', okLabel: 'OK', cancelLabel: 'Close' });
             return;
         }
+        if (!P || !EC || !CR) {
+            Mac.sheet('The export engine is not available in this build.',
+                { title: 'Cannot Export', okLabel: 'OK', cancelLabel: 'Close' });
+            return;
+        }
+
+        await CR.probe();
+        const presets = CR.availablePresets();
+        const usable = presets.filter(p => p.available);
+        if (!usable.length) {
+            Mac.sheet('No export format can be produced in this environment.',
+                { title: 'Cannot Export', okLabel: 'OK', cancelLabel: 'Close' });
+            return;
+        }
+
         const res = window.canvas ? `${canvas.width} × ${canvas.height}` : 'project resolution';
         const rows = (s.csvData && s.csvData.length) ? s.csvData.length : 1;
         const detail = rows > 1
             ? `${rows} variations from the loaded CSV, ${res}, ${(s.duration || 0).toFixed(2)}s each.`
             : `One video at ${res}, ${(s.duration || 0).toFixed(2)}s, from ${clips} clip${clips > 1 ? 's' : ''}.`;
 
-        const go = await Mac.sheet(detail, {
-            title: 'Export Project', okLabel: 'Export', cancelLabel: 'Cancel', cancelValue: false
+        const chosen = await Mac.sheet(detail, {
+            title: 'Export Project',
+            okLabel: 'Export',
+            cancelLabel: 'Cancel',
+            cancelValue: false,
+            choiceValue: usable[0].name,
+            choices: presets.map(p => ({
+                value: p.name,
+                label: p.available ? p.label : `${p.label} (unavailable)`,
+                disabled: !p.available,
+                title: p.available ? p.description : (p.advice || '')
+            }))
         });
-        if (go === true) call('startBulkExport');
+        if (chosen === false || chosen == null) return;
+
+        await Mac.runExportJobs(String(chosen), rows);
+    };
+
+    /**
+     * Render the selected variations and hand the files to the user.
+     *
+     * Progress is a real percentage from the pipeline, and Cancel stops the
+     * work rather than only closing the sheet.
+     */
+    Mac.runExportJobs = async function (preset, rows) {
+        const s = window.state;
+        const P = window.ForgeCut.ExportPipeline;
+        const EC = window.ForgeCut.ExportConfig;
+        const canvasEl = document.getElementById('renderCanvas');
+
+        const progress = Mac.progressSheet('Exporting…', 'Preparing');
+        const outputs = [];
+        let handle = null;
+        let cancelled = false;
+        progress.onCancel(() => {
+            cancelled = true;
+            if (handle) { try { handle.cancel(); } catch (e) { /* already gone */ } }
+        });
+
+        const total = Math.max(1, rows);
+        const origRow = s.selectedRowIndex;
+
+        try {
+            for (let i = 0; i < total; i++) {
+                if (cancelled) break;
+                if (rows > 1 && typeof window.selectRow === 'function') window.selectRow(i);
+
+                let name = 'ForgeCut Export';
+                if (rows > 1 && s.csvData && s.csvData[i]) {
+                    const first = Object.keys(s.csvData[i])[0];
+                    if (first && s.csvData[i][first]) name = String(s.csvData[i][first]);
+                }
+
+                progress.setLabel(rows > 1 ? `Variation ${i + 1} of ${total} — ${name}` : name);
+
+                const result = await P.runExport(s, renderCanvasComposition, {
+                    canvas: canvasEl,
+                    preset,
+                    name,
+                    duration: s.duration,
+                    onJob: (h) => { handle = h; },
+                    onUpdate: ({ job }) => {
+                        progress.setValue((i + (job.progress || 0)) / total);
+                        if (job.stage) progress.setStage(job.stage);
+                    }
+                });
+                outputs.push({ name: result.filename, blob: result.blob });
+                handle = null;
+            }
+        } catch (e) {
+            s.selectedRowIndex = origRow;
+            progress.close();
+            if (!(e && e.code === 'ECANCELLED') && !cancelled) {
+                Mac.sheet(e && e.message ? e.message : String(e),
+                    { title: 'Export Failed', okLabel: 'OK', cancelLabel: 'Close' });
+            }
+            return;
+        }
+
+        s.selectedRowIndex = origRow;
+        if (typeof renderCanvasComposition === 'function') renderCanvasComposition();
+        progress.close();
+
+        if (cancelled || !outputs.length) return;
+
+        const EE = window.ForgeCut.ExportEngine;
+        if (outputs.length === 1) {
+            EE.downloadBlob(outputs[0].blob, outputs[0].name);
+        } else {
+            // Duplicate CSV values would otherwise overwrite one another inside
+            // the archive.
+            const unique = EC.dedupeFilenames(outputs.map(o => o.name));
+            await EE.downloadZip(outputs.map((o, i) => ({ name: unique[i], blob: o.blob })),
+                'ForgeCut Export.zip');
+        }
+    };
+
+    /** A determinate progress sheet with a working Cancel. */
+    Mac.progressSheet = function (title, label) {
+        const scrim = document.createElement('div');
+        scrim.className = 'mac-sheet-scrim';
+        const sheet = document.createElement('div');
+        sheet.className = 'mac-sheet';
+        sheet.setAttribute('role', 'dialog');
+        sheet.setAttribute('aria-modal', 'true');
+
+        const h = document.createElement('h2');
+        h.textContent = title;
+        const p = document.createElement('p');
+        p.textContent = label || '';
+        const bar = document.createElement('div');
+        bar.className = 'mac-progress';
+        const fill = document.createElement('div');
+        fill.className = 'mac-progress-fill';
+        bar.appendChild(fill);
+        const stage = document.createElement('p');
+        stage.className = 'mac-progress-stage';
+
+        const actions = document.createElement('div');
+        actions.className = 'mac-sheet-actions';
+        const cancel = document.createElement('button');
+        cancel.className = 'mac-btn';
+        cancel.textContent = 'Cancel';
+        actions.appendChild(cancel);
+
+        sheet.append(h, p, bar, stage, actions);
+        scrim.appendChild(sheet);
+        document.body.appendChild(scrim);
+
+        let onCancel = () => {};
+        cancel.addEventListener('click', () => { cancel.disabled = true; cancel.textContent = 'Cancelling…'; onCancel(); });
+
+        return {
+            setLabel: (t) => { p.textContent = t; },
+            setStage: (t) => { stage.textContent = t; },
+            setValue: (v) => { fill.style.width = `${Math.round(Math.max(0, Math.min(1, v)) * 100)}%`; },
+            onCancel: (fn) => { onCancel = fn; },
+            close: () => scrim.remove()
+        };
     };
 
     window.triggerOpenProject = function () {

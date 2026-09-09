@@ -764,6 +764,32 @@ body.mac {
 .mac-sheet p { margin: 0 0 var(--s4); font-size: var(--t-body); color: var(--label-2); }
 .mac-sheet-actions { display: flex; justify-content: flex-end; gap: var(--s2); }
 
+/* Determinate progress inside a sheet, for export. */
+.mac-progress {
+    height: 6px;
+    border-radius: 3px;
+    background: var(--separator);
+    overflow: hidden;
+    margin-bottom: var(--s2);
+}
+.mac-progress-fill {
+    height: 100%;
+    width: 0%;
+    border-radius: 3px;
+    background: var(--mac-blue);
+    transition: width var(--d-fast) linear;
+}
+.mac-progress-stage {
+    margin: 0 0 var(--s4);
+    font-size: var(--t-caption);
+    color: var(--label-3);
+    min-height: 1em;
+    text-transform: capitalize;
+}
+@media (prefers-reduced-motion: reduce) {
+    .mac-progress-fill { transition: none; }
+}
+
 /* macOS push buttons: bordered rectangles. */
 .mac-btn {
     height: 22px;

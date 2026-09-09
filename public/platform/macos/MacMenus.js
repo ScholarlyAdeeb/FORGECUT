@@ -157,6 +157,25 @@
             p.textContent = message;
             sheet.appendChild(p);
 
+            // A pop-up button, which is how macOS presents a choice inside a
+            // sheet. Resolves to the selected value instead of `true`.
+            let choice = null;
+            if (opts.choices && opts.choices.length) {
+                choice = document.createElement('select');
+                choice.className = 'mac-select';
+                choice.style.marginBottom = 'var(--s4)';
+                opts.choices.forEach(c => {
+                    const o = document.createElement('option');
+                    o.value = c.value;
+                    o.textContent = c.label;
+                    if (c.disabled) o.disabled = true;
+                    if (c.title) o.title = c.title;
+                    if (c.value === opts.choiceValue) o.selected = true;
+                    choice.appendChild(o);
+                });
+                sheet.appendChild(choice);
+            }
+
             let input = null;
             if (opts.prompt) {
                 input = document.createElement('input');
@@ -190,13 +209,13 @@
             };
             function onKey(e) {
                 if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(opts.cancelValue); }
-                else if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); close(input ? input.value : true); }
+                else if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); close(input ? input.value : (choice ? choice.value : true)); }
             }
             document.addEventListener('keydown', onKey, true);
             cancel.addEventListener('click', () => close(opts.cancelValue));
-            ok.addEventListener('click', () => close(input ? input.value : true));
+            ok.addEventListener('click', () => close(input ? input.value : (choice ? choice.value : true)));
             scrim.addEventListener('mousedown', (e) => { if (e.target === scrim) close(opts.cancelValue); });
-            (input || ok).focus();
+            (input || choice || ok).focus();
             if (input) input.select();
         });
     };
