@@ -1,92 +1,56 @@
 # ForgeCut
 
-<p align="center">
-  <strong>A professional, desktop-class video editor built for the web.</strong>
-</p>
+### Professional video editing, forged for the web.
 
-<p align="center">
-  <em>Microsoft Fluent Design · Office-style Ribbon · Multi-track Timeline · High-performance Editing</em>
-</p>
+ForgeCut is a high-performance, desktop-class video editor built around a
+professional multi-track editing workflow, local media processing, and a
+platform-native interface philosophy.
 
-<p align="center">
-  <a href="https://github.com/ScholarlyAdeeb/FORGECUT">GitHub</a>
-  ·
-  <a href="https://github.com/ScholarlyAdeeb/FORGECUT/issues">Issues</a>
-</p>
+It combines a familiar non-linear editing workflow with a modular editing
+engine designed to run across desktop and web environments.
 
----
+> **Native First. Brand Second.**
 
-## ✦ About
-
-**ForgeCut** is an ambitious non-linear video editing environment designed to bring a professional desktop-editor experience to the web.
-
-Instead of treating video editing as another browser utility, ForgeCut is designed around a familiar **desktop creative workflow** — a structured project workspace, Office-inspired Ribbon controls, professional timeline editing, preview controls, media management, and contextual tools.
-
-The interface follows **Microsoft Fluent Design principles** and an **Office-style Ribbon workflow**, giving ForgeCut a familiar Windows-native feel while remaining browser-based.
-
-> **ForgeCut — Create without compromise.**
+ForgeCut is designed to feel at home on every platform it supports rather than
+forcing the same interface onto every screen.
 
 ---
 
 ## ✨ Highlights
 
-### Fluent Desktop Experience
-
-- Microsoft Fluent-inspired interface
-- Office-style Ribbon navigation
-- Structured editing workspace
-- Windows-inspired visual language
-- Light and dark interface support
-- Keyboard-first workflow
-- Contextual editing controls
-
-### Professional Editing Workspace
-
-- Multi-track timeline
-- Media/project browser
-- Preview canvas
-- Inspector and contextual controls
-- Export queue
-- Timeline trimming
-- Clip selection and manipulation
-- Playback controls
-- Undo/redo history
-
-### Editing Engine
-
-ForgeCut includes a modular editing architecture with dedicated subsystems for:
-
-- Media management
-- Playback
-- Audio
-- Video export
-- Animations
-- Transitions
-- Text rendering
-- Shape rendering
-- History management
-- Keyboard shortcuts
-- Background media processing
+- 🎬 **Multi-track timeline editing**
+- 🎞️ **Video, audio, and image media workflows**
+- 🖥️ **Professional preview workspace**
+- 📁 **Project and media management**
+- 🎛️ **Context-sensitive editing controls**
+- ↔️ **Drag-and-drop media workflows**
+- ▶️ **Timeline playback**
+- ✂️ **Clip splitting, trimming, moving, and snapping**
+- ↶ **Undo / redo history**
+- ⌨️ **Keyboard-driven editing workflows**
+- 📤 **Frame-accurate export pipeline**
+- ⚡ **Browser-native media APIs and Web Workers**
+- 🧪 **Automated end-to-end testing**
+- 🖥️ **Platform-specific presentation layers**
+- 🔒 **Local-first media handling**
 
 ---
 
-## 🖥️ Interface
+## 🎯 Why ForgeCut?
 
-ForgeCut is organized around a professional NLE workflow:
+Traditional video editors are powerful, but they can become unnecessarily
+complex when the workflow is repetitive or production needs to scale.
+
+ForgeCut aims to provide a professional editing environment while keeping the
+core workflow focused:
 
 ```text
-┌───────────────────────────────────────────────────────────────┐
-│ ForgeCut                                      Project   Export│
-├───────────────────────────────────────────────────────────────┤
-│ File │ Home │ Insert │ Design │ Transitions │ Animations │ ...│
-├──────────────┬───────────────────────────────┬───────────────┤
-│              │                               │               │
-│   Project    │                               │   Inspector   │
-│   Explorer   │         Preview Canvas        │      /        │
-│              │                               │ Export Queue  │
-│              │                               │               │
-├──────────────┴───────────────────────────────┴───────────────┤
-│                                                               │
-│                     MULTI-TRACK TIMELINE                      │
-│                                                               │
-└───────────────────────────────────────────────────────────────┘
+Import
+   ↓
+Organize
+   ↓
+Edit
+   ↓
+Preview
+   ↓
+Export
