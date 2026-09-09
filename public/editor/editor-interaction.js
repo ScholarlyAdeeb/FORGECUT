@@ -59,20 +59,32 @@
         }
     });
 
-    // Setup drag and drop events on Timeline container
-    if (timelineContainer) {
-        timelineContainer.addEventListener('dragover', (e) => {
+    // Setup drag and drop events on Timeline container.
+    //
+    // Resolved from the DOM rather than from the module-level `timelineContainer`:
+    // this block runs at script load, and that variable is not assigned until
+    // initDOMElements() runs inside runEditorInit(). Testing it here was always
+    // false, so the listener was never attached and dropping a media item on the
+    // timeline silently did nothing. The element exists by now because the
+    // scripts are at the end of <body>.
+    const dropTarget = document.getElementById('timelineContainer');
+    if (dropTarget) {
+        dropTarget.addEventListener('dragover', (e) => {
             e.preventDefault();
         });
-        timelineContainer.addEventListener('drop', (e) => {
+        dropTarget.addEventListener('drop', (e) => {
             e.preventDefault();
             try {
                 const data = JSON.parse(e.dataTransfer.getData('text/plain'));
                 if (data.type === 'media') {
-                    const asset = assetCache.get(data.assetId);
+                    // MediaEngine owns the library; the legacy assetCache is
+                    // empty, so looking there made every drop a no-op. Same
+                    // MediaEngine-first pattern as editor-render.js.
+                    const ME = window.ForgeCut && window.ForgeCut.MediaEngine;
+                    const asset = ME ? ME.getAsset(data.assetId) : assetCache.get(data.assetId);
                     if (asset) {
                         // Create clip at cursor
-                        const rect = timelineContainer.getBoundingClientRect();
+                        const rect = dropTarget.getBoundingClientRect();
                         const clientX = e.clientX - rect.left;
                         const startVal = Math.max(0, clientX / state.zoom);
 
@@ -97,7 +109,8 @@
                         saveStateToHistory();
 
                         if (data.assetType === 'video') {
-                            const audioAsset = assetCache.get(`${asset.id}_audio`);
+                            const audioAsset = ME ? ME.getAsset(`${asset.id}_audio`)
+                                : assetCache.get(`${asset.id}_audio`);
                             if (audioAsset) {
                                 const audioTrack = state.tracks.find(t => t.id === 'audioTrack');
                                 const linkedAudioClipId = `clip_${Date.now()}_audio`;
@@ -502,4 +515,4 @@
             });
         });
     };
-
+
