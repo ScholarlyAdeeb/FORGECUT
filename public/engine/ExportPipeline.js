@@ -262,6 +262,222 @@
         return blob;
     }
 
+    /* ─────────────────── frame-accurate offline rendering ─────────────────── */
+
+    /**
+     * Move every in-range media element to its clip-local time and WAIT.
+     *
+     * This is the step the realtime capture path cannot perform. A <video>
+     * element does not update the frame it exposes to drawImage until it has
+     * finished seeking, so a render loop that only sets state.currentTime draws
+     * whatever frame the element happened to be showing. Measured on a source
+     * whose colour changes every second: without this, all six sampled
+     * timeline positions rendered the SAME frame; with it, they render the six
+     * expected ones.
+     */
+    async function seekAllForRender(appState, time) {
+        const ME = window.ForgeCut && window.ForgeCut.MediaEngine;
+        if (!ME) return;
+        const waits = [];
+
+        (appState.tracks || []).forEach(track => {
+            (track.clips || []).forEach(clip => {
+                const asset = ME.getAsset(clip.assetId);
+                if (!asset || !asset.element) return;
+                const el = asset.element;
+                if (!el.duration || !isFinite(el.duration)) return;
+
+                const inRange = time >= clip.startTime && time < clip.startTime + clip.duration;
+                if (!inRange) return;
+
+                // Speed is applied during playback as element.playbackRate, which
+                // an offline seek never sees. Without folding it into the source
+                // time here, a 2x clip previewed at 2x but exported at 1x - a
+                // preview-only behaviour failing silently at render.
+                const speed = (clip.playbackSpeed !== undefined && clip.playbackSpeed > 0)
+                    ? clip.playbackSpeed : 1;
+
+                // Clamp: seeking past the end never fires 'seeked'.
+                let target = (time - clip.startTime) * speed + (clip.trimStart || 0);
+                target = Math.max(0, Math.min(target, Math.max(0, el.duration - 1e-3)));
+
+                // A frame is ~1/fps wide; anything closer than half that is
+                // already the right frame and re-seeking only costs time.
+                if (Math.abs(el.currentTime - target) < 0.005) return;
+
+                if (!el.paused) { try { el.pause(); } catch (e) { /* ignore */ } }
+                waits.push(new Promise(resolve => {
+                    let done = false;
+                    const finish = () => {
+                        if (done) return;
+                        done = true;
+                        el.removeEventListener('seeked', finish);
+                        resolve();
+                    };
+                    el.addEventListener('seeked', finish);
+                    // A seek that never completes must not hang the export.
+                    setTimeout(finish, 2000);
+                    try { el.currentTime = target; } catch (e) { finish(); }
+                }));
+            });
+        });
+
+        if (waits.length) await Promise.all(waits);
+    }
+
+    /** Does this project contain anything that has to be seeked to render? */
+    function needsFrameAccurateRender(appState) {
+        const ME = window.ForgeCut && window.ForgeCut.MediaEngine;
+        if (!ME) return false;
+        return (appState.tracks || []).some(track =>
+            track.type !== 'audio' && (track.clips || []).some(clip => {
+                const a = ME.getAsset(clip.assetId);
+                return !!(a && a.element && a.element.duration && isFinite(a.element.duration) && a.type === 'video');
+            }));
+    }
+
+    function canvasToBlob(canvas, type, quality) {
+        return new Promise((resolve, reject) => {
+            canvas.toBlob(b => b ? resolve(b) : reject(new Error('Canvas produced no image data.')), type, quality);
+        });
+    }
+
+    /**
+     * Render every frame offline and stream it to the server encoder.
+     *
+     * Nothing accumulates: one frame Blob exists at a time, it is PUT
+     * immediately, and the reference is dropped. Peak memory is therefore flat
+     * in the length of the export rather than linear, which is what makes long
+     * and 4K exports survivable at all.
+     */
+    async function renderOfflineFrames(job, appState, renderFn, options) {
+        const ecfg = EC();
+        const canvas = options.canvas;
+        const fps = options.fps;
+        const duration = options.duration;
+        const totalFrames = Math.max(1, Math.round(duration * fps));
+
+        setState(job, 'PREPARING', 'frame-accurate');
+
+        const res = await fetch('/api/export/jobs', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ config: job.config, name: job.name }),
+            signal: job._abort.signal
+        });
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err.error || `Export server refused the job (HTTP ${res.status}).`);
+        }
+        const created = await res.json();
+        job._serverJobId = created.id;
+        job.filename = created.filename;
+
+        // Audio first: it is one deterministic offline mix, independent of the
+        // frame loop, so A/V alignment does not depend on capture timing.
+        if (job.config.audioCodec) {
+            const AE = window.ForgeCut && window.ForgeCut.AudioEngine;
+            const EE = window.ForgeCut && window.ForgeCut.ExportEngine;
+            if (AE && EE && typeof AE.renderOfflineAudio === 'function') {
+                try {
+                    const buffer = await AE.renderOfflineAudio(appState.tracks, duration,
+                        job.config.audioSampleRate || 48000);
+                    if (buffer) {
+                        const wav = EE.audioBufferToWav(buffer);
+                        const up = await fetch(`/api/export/jobs/${created.id}/audio`, {
+                            method: 'PUT',
+                            headers: { 'content-type': 'application/octet-stream' },
+                            body: new Blob([wav], { type: 'audio/wav' }),
+                            signal: job._abort.signal
+                        });
+                        if (!up.ok) throw new Error(`Audio upload failed (HTTP ${up.status}).`);
+                        job.log.push({ t: Date.now(), detail: `audio mix ${buffer.duration.toFixed(3)}s` });
+                    }
+                } catch (e) {
+                    job.log.push({ t: Date.now(), warning: `Audio mix failed: ${e && e.message}` });
+                }
+            }
+        }
+
+        setState(job, 'ENCODING', 'frames');
+        const origTime = appState.currentTime;
+        const renderShare = options.renderShare == null ? 0.7 : options.renderShare;
+        let bytes = 0;
+
+        try {
+            for (let i = 0; i < totalFrames; i++) {
+                cancelled(job);
+                const t = i / fps;
+                appState.currentTime = t;
+
+                await seekAllForRender(appState, t);
+                renderFn();
+
+                // PNG keeps the render bit-exact, so a fidelity failure is the
+                // renderer's rather than the frame codec's.
+                const blob = await canvasToBlob(canvas, 'image/png');
+                bytes += blob.size;
+
+                const put = await fetch(`/api/export/jobs/${created.id}/frames/${i + 1}`, {
+                    method: 'PUT',
+                    headers: { 'content-type': 'image/png' },
+                    body: blob,
+                    signal: job._abort.signal
+                });
+                if (!put.ok) {
+                    const err = await put.json().catch(() => ({}));
+                    throw new Error(err.error || `Frame ${i + 1} upload failed (HTTP ${put.status}).`);
+                }
+
+                setProgress(job, 'render', ((i + 1) / totalFrames) * renderShare);
+            }
+        } finally {
+            appState.currentTime = origTime;
+        }
+
+        job.framesRendered = totalFrames;
+        job.frameBytes = bytes;
+
+        const start = await fetch(`/api/export/jobs/${created.id}/start`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ fps }),
+            signal: job._abort.signal
+        });
+        if (!start.ok) {
+            const err = await start.json().catch(() => ({}));
+            throw new Error(err.error || `Could not start encoding (HTTP ${start.status}).`);
+        }
+
+        let last = null;
+        for (;;) {
+            cancelled(job);
+            await new Promise(r => setTimeout(r, 250));
+            const st = await fetch(`/api/export/jobs/${created.id}`, { signal: job._abort.signal });
+            if (!st.ok) throw new Error(`Lost track of the export job (HTTP ${st.status}).`);
+            last = await st.json();
+
+            if (last.state === 'VALIDATING' && job.state !== 'VALIDATING') setState(job, 'VALIDATING');
+            else if (last.state === 'FINALIZING' && job.state !== 'FINALIZING') setState(job, 'FINALIZING');
+
+            setProgress(job, String(last.state).toLowerCase(),
+                renderShare + (1 - renderShare) * (last.progress || 0));
+
+            if (last.state === 'COMPLETED') break;
+            if (last.state === 'FAILED') throw new Error(last.error || 'Encoding failed on the server.');
+            if (last.state === 'CANCELLED') { const e = new Error('Export cancelled'); e.code = 'ECANCELLED'; throw e; }
+        }
+
+        job.validation = last.validation;
+        const dl = await fetch(`/api/export/jobs/${created.id}/download`, { signal: job._abort.signal });
+        if (!dl.ok) throw new Error(`Could not download the finished export (HTTP ${dl.status}).`);
+        const out = await dl.blob();
+
+        fetch(`/api/export/jobs/${created.id}`, { method: 'DELETE' }).catch(() => {});
+        job._serverJobId = null;
+        return out;
+    }
+
     /* ──────────────────────── stage 2a: server transcode ──────────────────── */
 
     async function transcodeOnServer(job, master) {
@@ -594,7 +810,39 @@
 
         const audioOnly = ecfg.isAudioOnly(config.container);
 
+        // Frame-accurate rendering is REQUIRED whenever a video clip is on the
+        // timeline: the realtime capture path cannot wait for a seek, so it
+        // would export the same frozen frame for the whole clip. It needs the
+        // server encoder, because assembling an image sequence at an exact
+        // frame rate is what makes the timing right.
+        const wantsFrameAccurate = !audioOnly &&
+            options.mode !== 'realtime' &&
+            needsFrameAccurateRender(appState) &&
+            registry.server && registry.server.available &&
+            backendCanTake(registry, config);
+
+        if (wantsFrameAccurate) {
+            job.backend = 'server-ffmpeg-frames';
+            job.captureShare = 0.7;
+        }
+
         try {
+            if (wantsFrameAccurate) {
+                const out = await renderOfflineFrames(job, appState, renderFn, {
+                    canvas: options.canvas,
+                    fps: options.fps || (config.frameRate === 'source' ? 30 : config.frameRate) || 30,
+                    duration: job.durationSec,
+                    renderShare: 0.7
+                });
+                job.blob = out;
+                job.bytes = out.size;
+                job.filename = job.filename ||
+                    ecfg.sanitiseFilename(job.name, ecfg.CONTAINERS[config.container].ext);
+                setProgress(job, 'done', 1);
+                setState(job, 'COMPLETED');
+                return publicViewWithBlob(job);
+            }
+
             const master = audioOnly
                 ? await renderAudioMaster(job, appState, {
                     duration: job.durationSec,
@@ -657,6 +905,16 @@
         return v;
     }
 
+    /** Can the server encoder produce this configuration? */
+    function backendCanTake(registry, cfg) {
+        const srv = registry.server;
+        if (!srv || !srv.available) return false;
+        if ((srv.containers || []).indexOf(cfg.container) === -1) return false;
+        if (cfg.videoCodec && (srv.videoCodecs || []).indexOf(cfg.videoCodec) === -1) return false;
+        if (cfg.audioCodec && (srv.audioCodecs || []).indexOf(cfg.audioCodec) === -1) return false;
+        return true;
+    }
+
     /** Stop an export at whatever stage it has reached. */
     async function cancel(job) {
         if (!job) return false;
@@ -675,7 +933,8 @@
     }
 
     const API = { STATES, runExport, cancel, createJob, buildWasmArgs, publicView,
-        validateLocally, matchSignature, SIGNATURES };
+        validateLocally, matchSignature, SIGNATURES,
+        seekAllForRender, needsFrameAccurateRender };
 
     if (typeof window !== 'undefined') {
         window.ForgeCut = window.ForgeCut || {};

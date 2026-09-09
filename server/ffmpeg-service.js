@@ -193,6 +193,72 @@ function buildArgs(config, inputPath, outputPath, opts) {
     return args;
 }
 
+/**
+ * Build the argument vector for encoding a STREAMED FRAME SEQUENCE.
+ *
+ * The realtime capture path cannot be frame-accurate: MediaRecorder samples
+ * the canvas on the wall clock, so the render loop is not allowed to wait for
+ * a video element to finish seeking, and every exported frame is therefore
+ * whatever frame the element happened to be showing. This path exists because
+ * an offline render CAN wait: the browser seeks, waits, draws, and ships one
+ * image per frame, and FFmpeg assembles them at an exact frame rate.
+ *
+ * -framerate on the INPUT is what sets the timebase for an image sequence;
+ * -r alone would duplicate or drop frames to reach the target instead.
+ */
+function buildFrameArgs(config, framesPattern, audioPath, outputPath, fps) {
+    const check = EC.validate(config);
+    if (!check.ok) {
+        const e = new Error(check.errors.join(' '));
+        e.code = 'EINVALIDCONFIG';
+        throw e;
+    }
+    const cfg = check.config;
+    const container = EC.CONTAINERS[cfg.container];
+    if (!isFinite(fps) || fps <= 0 || fps > 240) {
+        const e = new Error('Frame rate must be between 1 and 240.');
+        e.code = 'EINVALIDCONFIG';
+        throw e;
+    }
+
+    const args = ['-hide_banner', '-nostdin', '-y', '-progress', 'pipe:1', '-nostats'];
+
+    args.push('-framerate', String(fps), '-i', framesPattern);
+    if (audioPath) args.push('-i', audioPath);
+
+    if (cfg.videoCodec) {
+        const vc = EC.VIDEO_CODECS[cfg.videoCodec];
+        args.push('-c:v', vc.encoder, '-pix_fmt', vc.pixFmt);
+        if (cfg.resolution && cfg.resolution !== 'source') {
+            args.push('-s', `${cfg.resolution.width}x${cfg.resolution.height}`);
+        }
+        if (cfg.bitrate) args.push('-b:v', `${cfg.bitrate}k`);
+        if (cfg.videoCodec === 'h264' || cfg.videoCodec === 'h265') args.push('-preset', 'medium');
+        if (cfg.videoCodec === 'vp9') args.push('-row-mt', '1');
+        if (cfg.videoCodec === 'prores') args.push('-profile:v', '3');
+    } else {
+        args.push('-vn');
+    }
+
+    if (cfg.audioCodec && audioPath) {
+        const ac = EC.AUDIO_CODECS[cfg.audioCodec];
+        args.push('-c:a', ac.encoder);
+        if (cfg.audioBitrate && !ac.lossless) args.push('-b:a', `${cfg.audioBitrate}k`);
+        if (cfg.audioSampleRate) args.push('-ar', String(cfg.audioSampleRate));
+    } else {
+        args.push('-an');
+    }
+
+    // The frame count defines the length. Without -shortest a longer audio
+    // track would stretch the file past the end of the video.
+    if (audioPath && cfg.videoCodec) args.push('-shortest');
+
+    if (container.faststart) args.push('-movflags', '+faststart');
+    const muxerFor = { mp4: 'mp4', mkv: 'matroska', webm: 'webm', mov: 'mov', mp3: 'mp3', wav: 'wav', m4a: 'ipod' };
+    args.push('-f', muxerFor[cfg.container], outputPath);
+    return args;
+}
+
 /* ────────────────────────────── job registry ───────────────────────────── */
 
 const STATES = ['QUEUED', 'PREPARING', 'ENCODING', 'FINALIZING', 'VALIDATING', 'COMPLETED', 'FAILED', 'CANCELLED'];
@@ -288,6 +354,46 @@ function makeProgressParser(job) {
 }
 
 /**
+ * Encode a job whose frames were streamed in one by one.
+ */
+async function encodeJobFromFrames(job) {
+    const caps = await probeCapabilities();
+    if (!caps.available) {
+        setState(job, 'FAILED', caps.reason);
+        job.error = caps.reason;
+        throw new Error(caps.reason);
+    }
+
+    const framesDir = safeJoin(job.dir, 'frames');
+    const pattern = path.join(framesDir, '%06d.png');
+    const audioPath = job.hasAudio ? safeJoin(job.dir, 'audio.wav') : null;
+    const outName = `output.${EC.CONTAINERS[job.config.container].ext}`;
+    const outputPath = safeJoin(job.dir, outName);
+
+    setState(job, 'PREPARING');
+    const frameCount = job.frameCount || 0;
+    if (frameCount < 1) {
+        const e = new Error('No frames were uploaded for this job.');
+        e.code = 'ENOFRAMES';
+        throw e;
+    }
+    job.durationSec = frameCount / job.fps;
+
+    const args = buildFrameArgs(job.config, pattern, audioPath, outputPath, job.fps);
+    job.log.push({ t: Date.now(), argv: args, frames: frameCount, fps: job.fps });
+
+    setState(job, 'ENCODING');
+    await runFfmpeg(job, args);
+
+    setState(job, 'FINALIZING');
+    const stat = await fsp.stat(outputPath);
+    job.outputPath = outputPath;
+    job.outputBytes = stat.size;
+    job.progress = 1;
+    return outputPath;
+}
+
+/**
  * Run FFmpeg for a job whose input has already been written to disk.
  */
 async function encodeJob(job, inputName) {
@@ -309,8 +415,19 @@ async function encodeJob(job, inputName) {
     job.log.push({ t: Date.now(), argv: args });
 
     setState(job, 'ENCODING');
+    await runFfmpeg(job, args);
 
-    await new Promise((resolve, reject) => {
+    setState(job, 'FINALIZING');
+    const stat = await fsp.stat(outputPath);
+    job.outputPath = outputPath;
+    job.outputBytes = stat.size;
+    job.progress = 1;
+    return outputPath;
+}
+
+/** Spawn FFmpeg for a job and resolve when it exits cleanly. */
+function runFfmpeg(job, args) {
+    return new Promise((resolve, reject) => {
         // shell:false is the default for spawn, stated explicitly because it is
         // the property that makes the argument array safe.
         const proc = spawn(FFMPEG, args, { shell: false, windowsHide: true });
@@ -348,13 +465,6 @@ async function encodeJob(job, inputName) {
             reject(Object.assign(new Error(describeFfmpegFailure(job.stderr, code, signal)), { code: 'EENCODE' }));
         });
     });
-
-    setState(job, 'FINALIZING');
-    const stat = await fsp.stat(outputPath);
-    job.outputPath = outputPath;
-    job.outputBytes = stat.size;
-    job.progress = 1;
-    return outputPath;
 }
 
 /**
@@ -630,8 +740,8 @@ function shutdownSync() {
 
 module.exports = {
     FFMPEG, FFPROBE, ROOT_TMP, STATES, MAX_UPLOAD_BYTES, JOB_TIMEOUT_MS,
-    probeCapabilities, buildArgs, safeJoin,
-    createJob, getJob, encodeJob, validateOutput, cancelJob, disposeJob, cleanupJob,
+    probeCapabilities, buildArgs, buildFrameArgs, safeJoin,
+    createJob, getJob, encodeJob, encodeJobFromFrames, validateOutput, cancelJob, disposeJob, cleanupJob,
     sweep, shutdownSync, describeFfmpegFailure, probeDuration, killTree, rmWithRetry,
     _jobs: jobs
 };

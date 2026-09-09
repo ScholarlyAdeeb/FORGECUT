@@ -32,6 +32,8 @@ function publicJob(job) {
         fps: job.fps || 0,
         durationSec: job.durationSec,
         bytes: job.outputBytes || 0,
+        frameCount: job.frameCount || 0,
+        frameBytes: job.frameBytes || 0,
         filename: job.filename || null,
         config: job.config,
         error: job.error || null,
@@ -165,6 +167,97 @@ function createRouter() {
         req.pipe(out);
     });
 
+    /**
+     * Receive ONE rendered frame.
+     *
+     * Frames arrive individually and are streamed straight to disk, so a long
+     * or high-resolution export never accumulates in either the browser heap or
+     * this process's. The index is server-side padded into an FFmpeg image
+     * sequence name; the client supplies a number, never a filename.
+     */
+    router.put('/jobs/:id/frames/:n', (req, res) => {
+        const job = findJob(req, res);
+        if (!job) return;
+        if (job.state !== 'QUEUED') {
+            return res.status(409).json({ error: `Job is ${job.state}; frames are only accepted while QUEUED.` });
+        }
+        const n = Number(req.params.n);
+        if (!Number.isInteger(n) || n < 1 || n > 2000000) {
+            return res.status(400).json({ error: 'Frame index must be a positive integer.' });
+        }
+
+        let target, dir;
+        try {
+            dir = svc.safeJoin(job.dir, 'frames');
+            // %06d, matching the pattern the encoder is given. Built from a
+            // validated integer, so nothing from the client reaches the path.
+            target = svc.safeJoin(dir, String(n).padStart(6, '0') + '.png');
+        } catch (e) {
+            return res.status(400).json({ error: 'Invalid frame path.' });
+        }
+        fs.mkdirSync(dir, { recursive: true });
+
+        let received = 0;
+        let aborted = false;
+        const out = fs.createWriteStream(target);
+        const fail = (status, message) => {
+            if (aborted) return;
+            aborted = true;
+            req.unpipe(out); out.destroy();
+            fsp.rm(target, { force: true }).catch(() => {});
+            if (!res.headersSent) res.status(status).json({ error: message });
+        };
+        req.on('data', (c) => {
+            received += c.length;
+            if (received > 64 * 1024 * 1024) fail(413, 'Single frame exceeds 64 MB.');
+        });
+        req.on('aborted', () => fail(400, 'Frame upload aborted.'));
+        out.on('error', (e) => fail(500, `Could not write frame: ${e.message}`));
+        out.on('finish', () => {
+            if (aborted) return;
+            if (received === 0) return fail(400, 'Frame was empty.');
+            job.frameCount = Math.max(job.frameCount || 0, n);
+            job.frameBytes = (job.frameBytes || 0) + received;
+            res.json({ ok: true, n, bytes: received });
+        });
+        req.pipe(out);
+    });
+
+    /** Receive the offline audio mix that goes with a frame sequence. */
+    router.put('/jobs/:id/audio', (req, res) => {
+        const job = findJob(req, res);
+        if (!job) return;
+        if (job.state !== 'QUEUED') {
+            return res.status(409).json({ error: `Job is ${job.state}; audio is only accepted while QUEUED.` });
+        }
+        let target;
+        try { target = svc.safeJoin(job.dir, 'audio.wav'); }
+        catch (e) { return res.status(400).json({ error: 'Invalid job directory.' }); }
+
+        let received = 0, aborted = false;
+        const out = fs.createWriteStream(target);
+        const fail = (status, message) => {
+            if (aborted) return;
+            aborted = true;
+            req.unpipe(out); out.destroy();
+            fsp.rm(target, { force: true }).catch(() => {});
+            if (!res.headersSent) res.status(status).json({ error: message });
+        };
+        req.on('data', (c) => {
+            received += c.length;
+            if (received > svc.MAX_UPLOAD_BYTES) fail(413, 'Audio exceeds the upload limit.');
+        });
+        req.on('aborted', () => fail(400, 'Audio upload aborted.'));
+        out.on('error', (e) => fail(500, `Could not write audio: ${e.message}`));
+        out.on('finish', () => {
+            if (aborted) return;
+            if (received === 0) return fail(400, 'Audio was empty.');
+            job.hasAudio = true;
+            res.json({ ok: true, bytes: received });
+        });
+        req.pipe(out);
+    });
+
     /** Begin encoding. Returns immediately; poll GET /jobs/:id for progress. */
     router.post('/jobs/:id/start', async (req, res) => {
         const job = findJob(req, res);
@@ -172,8 +265,16 @@ function createRouter() {
         if (job.state !== 'QUEUED') {
             return res.status(409).json({ error: `Job is already ${job.state}.` });
         }
-        if (!job.sourceBytes) {
+        const frameMode = (job.frameCount || 0) > 0;
+        if (!frameMode && !job.sourceBytes) {
             return res.status(409).json({ error: 'No source uploaded for this job.' });
+        }
+        if (frameMode) {
+            const fps = Number(req.body && req.body.fps);
+            if (!isFinite(fps) || fps <= 0 || fps > 240) {
+                return res.status(422).json({ error: 'A frame-sequence job must be started with a frame rate between 1 and 240.' });
+            }
+            job.fps = fps;
         }
 
         res.status(202).json(publicJob(job));
@@ -182,7 +283,7 @@ function createRouter() {
         // rather than thrown into an already-answered request.
         (async () => {
             try {
-                await svc.encodeJob(job, 'source.bin');
+                await (frameMode ? svc.encodeJobFromFrames(job) : svc.encodeJob(job, 'source.bin'));
                 await svc.validateOutput(job);
                 if (job.validation && !job.validation.ok) {
                     job.state = 'FAILED';
