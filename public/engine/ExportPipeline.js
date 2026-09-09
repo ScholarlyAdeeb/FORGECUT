@@ -478,6 +478,273 @@
         return out;
     }
 
+    /* ────────────────── frame-accurate rendering in the browser ───────────── */
+
+    /**
+     * Codec strings to try for each of our codec ids, best first.
+     *
+     * Probed rather than assumed: this browser supports H.264 HIGH but reports
+     * baseline and main as unsupported, so the conventional 'avc1.42E01E'
+     * would fail here. The level digits also have to cover the frame size, so
+     * larger levels are offered first and the list is probed at the ACTUAL
+     * export resolution.
+     */
+    const WEBCODEC_CANDIDATES = {
+        h264: ['avc1.640034', 'avc1.640033', 'avc1.640032', 'avc1.640028', 'avc1.4D4028', 'avc1.42E01E'],
+        h265: ['hvc1.1.6.L153.B0', 'hvc1.1.6.L120.B0', 'hvc1.1.6.L93.B0'],
+        vp8: ['vp8'],
+        vp9: ['vp09.00.51.08', 'vp09.00.41.08', 'vp09.00.10.08']
+    };
+
+    /** Which of our video codecs this browser can hardware/software encode. */
+    async function probeWebCodec(videoCodec, width, height, bitrate, fps) {
+        if (typeof VideoEncoder === 'undefined' || !VideoEncoder.isConfigSupported) return null;
+        const list = WEBCODEC_CANDIDATES[videoCodec];
+        if (!list) return null;
+
+        for (const codec of list) {
+            const cfg = {
+                codec,
+                width: Math.round(width), height: Math.round(height),
+                bitrate: Math.max(100000, Math.round((bitrate || 8000) * 1000)),
+                framerate: fps
+            };
+            // Annex B keeps the elementary stream muxable with -c:v copy.
+            if (codec.startsWith('avc1')) cfg.avc = { format: 'annexb' };
+            if (codec.startsWith('hvc1')) cfg.hevc = { format: 'annexb' };
+            try {
+                const res = await VideoEncoder.isConfigSupported(cfg);
+                if (res && res.supported) return res.config || cfg;
+            } catch (e) { /* try the next candidate */ }
+        }
+        return null;
+    }
+
+    /**
+     * Wrap raw VP8/VP9 frames in an IVF container.
+     *
+     * WebCodecs hands back bare compressed frames with no container, and
+     * FFmpeg cannot demux those on their own. IVF is the minimal wrapper that
+     * carries the codec fourcc, the frame size and a timebase, which is
+     * everything needed to mux losslessly afterwards.
+     */
+    function wrapIVF(frames, fourcc, width, height, fps) {
+        const payload = frames.reduce((n, f) => n + f.length + 12, 0);
+        const out = new Uint8Array(32 + payload);
+        const dv = new DataView(out.buffer);
+        const ascii = (s, at) => { for (let i = 0; i < s.length; i++) out[at + i] = s.charCodeAt(i); };
+
+        ascii('DKIF', 0);
+        dv.setUint16(4, 0, true);          // version
+        dv.setUint16(6, 32, true);         // header length
+        ascii(fourcc, 8);
+        dv.setUint16(12, width, true);
+        dv.setUint16(14, height, true);
+        dv.setUint32(16, Math.round(fps), true);  // timebase denominator
+        dv.setUint32(20, 1, true);                // timebase numerator
+        dv.setUint32(24, frames.length, true);
+        dv.setUint32(28, 0, true);
+
+        let off = 32;
+        frames.forEach((f, i) => {
+            dv.setUint32(off, f.length, true);
+            dv.setUint32(off + 4, i, true);   // timestamp low
+            dv.setUint32(off + 8, 0, true);   // timestamp high
+            out.set(f, off + 12);
+            off += 12 + f.length;
+        });
+        return out;
+    }
+
+    /**
+     * Render every frame offline and encode it with WebCodecs, then let
+     * ffmpeg.wasm MUX the result without re-encoding.
+     *
+     * This is what makes a frame-accurate export possible with no server. The
+     * realtime capture path cannot wait for a seek, so it exported one frozen
+     * frame per video clip; this path seeks, waits, draws, and hands the frame
+     * to a hardware encoder. ffmpeg.wasm then only has to mux (-c:v copy),
+     * which costs milliseconds rather than the seconds per frame that encoding
+     * in wasm would.
+     */
+    async function renderFramesWithWebCodecs(job, appState, renderFn, options) {
+        const ecfg = EC();
+        const cfg = job.config;
+        const canvas = options.canvas;
+        const fps = options.fps;
+        const duration = options.duration;
+        const totalFrames = Math.max(1, Math.round(duration * fps));
+        const renderShare = options.renderShare == null ? 0.75 : options.renderShare;
+
+        const width = (cfg.resolution && cfg.resolution !== 'source') ? cfg.resolution.width : canvas.width;
+        const height = (cfg.resolution && cfg.resolution !== 'source') ? cfg.resolution.height : canvas.height;
+
+        setState(job, 'PREPARING', 'webcodecs');
+        const encoderConfig = await probeWebCodec(cfg.videoCodec, width, height, cfg.bitrate, fps);
+        if (!encoderConfig) {
+            const e = new Error(`This browser cannot encode ${cfg.videoCodec} with WebCodecs.`);
+            e.code = 'ENOWEBCODEC';
+            throw e;
+        }
+
+        // Scaling target, if the export resolution differs from the canvas.
+        let scratch = null;
+        if (width !== canvas.width || height !== canvas.height) {
+            scratch = document.createElement('canvas');
+            scratch.width = width; scratch.height = height;
+        }
+
+        const chunks = [];
+        let encodeError = null;
+        const encoder = new VideoEncoder({
+            output: (chunk) => {
+                const buf = new Uint8Array(chunk.byteLength);
+                chunk.copyTo(buf);
+                chunks.push(buf);
+            },
+            error: (e) => { encodeError = e; }
+        });
+        encoder.configure(encoderConfig);
+        job._encoder = encoder;
+
+        setState(job, 'ENCODING', 'webcodecs');
+        const origTime = appState.currentTime;
+        const frameDurUs = Math.round(1e6 / fps);
+
+        try {
+            for (let i = 0; i < totalFrames; i++) {
+                cancelled(job);
+                if (encodeError) throw encodeError;
+
+                appState.currentTime = i / fps;
+                await seekAllForRender(appState, i / fps);
+                renderFn();
+
+                let source = canvas;
+                if (scratch) {
+                    const sx = scratch.getContext('2d');
+                    sx.drawImage(canvas, 0, 0, width, height);
+                    source = scratch;
+                }
+
+                const frame = new VideoFrame(source, {
+                    timestamp: Math.round((i * 1e6) / fps),
+                    duration: frameDurUs
+                });
+                // A keyframe every second keeps the result seekable.
+                encoder.encode(frame, { keyFrame: i % Math.max(1, Math.round(fps)) === 0 });
+                frame.close();
+
+                // Backpressure: without this the encoder queue grows without
+                // bound and the whole point of streaming is lost.
+                while (encoder.encodeQueueSize > 8) {
+                    await new Promise(r => setTimeout(r, 1));
+                    if (job.cancelled) break;
+                }
+
+                setProgress(job, 'render', ((i + 1) / totalFrames) * renderShare);
+            }
+            await encoder.flush();
+        } finally {
+            appState.currentTime = origTime;
+            try { encoder.close(); } catch (e) { /* already closed */ }
+            job._encoder = null;
+        }
+        if (encodeError) throw encodeError;
+        cancelled(job);
+
+        // Assemble the elementary stream. Encoded frames are ~100x smaller than
+        // raw ones, so this is the one place data is gathered, and it is the
+        // compressed size rather than the pixel size.
+        let elementary, inputArgs;
+        const totalBytes = chunks.reduce((n, c) => n + c.length, 0);
+        if (cfg.videoCodec === 'vp8' || cfg.videoCodec === 'vp9') {
+            elementary = wrapIVF(chunks, cfg.videoCodec === 'vp9' ? 'VP90' : 'VP80', width, height, fps);
+            inputArgs = ['-f', 'ivf', '-i', 'video.ivf'];
+        } else if (cfg.videoCodec === 'h265') {
+            elementary = concatChunks(chunks, totalBytes);
+            inputArgs = ['-f', 'hevc', '-framerate', String(fps), '-i', 'video.h265'];
+        } else {
+            elementary = concatChunks(chunks, totalBytes);
+            inputArgs = ['-f', 'h264', '-framerate', String(fps), '-i', 'video.h264'];
+        }
+        job.encodedBytes = elementary.length;
+
+        setState(job, 'FINALIZING', 'mux');
+        setProgress(job, 'mux', renderShare);
+
+        const { FFmpeg } = await import('/vendor/ffmpeg/index.js');
+        const { toBlobURL } = await import('/vendor/ffmpeg-util/index.js');
+        const base = '/vendor/ffmpeg-core';
+        const ff = new FFmpeg();
+        job._wasm = ff;
+        await ff.load({
+            coreURL: await toBlobURL(`${base}/ffmpeg-core.js`, 'text/javascript'),
+            wasmURL: await toBlobURL(`${base}/ffmpeg-core.wasm`, 'application/wasm')
+        });
+        cancelled(job);
+
+        const vName = inputArgs[inputArgs.length - 1];
+        await ff.writeFile(vName, elementary);
+
+        // Audio is a separate deterministic offline mix, so A/V alignment does
+        // not depend on capture timing.
+        let hasAudio = false;
+        if (cfg.audioCodec) {
+            const AE = window.ForgeCut && window.ForgeCut.AudioEngine;
+            const EE = window.ForgeCut && window.ForgeCut.ExportEngine;
+            if (AE && EE) {
+                try {
+                    const buffer = await AE.renderOfflineAudio(appState.tracks, duration,
+                        cfg.audioSampleRate || 48000);
+                    if (buffer) {
+                        await ff.writeFile('audio.wav', new Uint8Array(EE.audioBufferToWav(buffer)));
+                        hasAudio = true;
+                    }
+                } catch (e) {
+                    job.log.push({ t: Date.now(), warning: `Audio mix failed: ${e && e.message}` });
+                }
+            }
+        }
+
+        const outName = `output.${ecfg.CONTAINERS[cfg.container].ext}`;
+        const args = ['-hide_banner', '-y'].concat(inputArgs);
+        if (hasAudio) args.push('-i', 'audio.wav');
+        // The video is already encoded — copy it rather than paying for a
+        // second, much slower, wasm encode.
+        args.push('-c:v', 'copy');
+        if (hasAudio) {
+            const ac = ecfg.AUDIO_CODECS[cfg.audioCodec];
+            args.push('-c:a', ac.encoder);
+            if (cfg.audioBitrate && !ac.lossless) args.push('-b:a', `${cfg.audioBitrate}k`);
+            if (cfg.audioSampleRate) args.push('-ar', String(cfg.audioSampleRate));
+            args.push('-shortest');
+        } else {
+            args.push('-an');
+        }
+        if (ecfg.CONTAINERS[cfg.container].faststart) args.push('-movflags', '+faststart');
+        const muxerFor = { mp4: 'mp4', mkv: 'matroska', webm: 'webm', mov: 'mov' };
+        args.push('-f', muxerFor[cfg.container], outName);
+        job.log.push({ t: Date.now(), argv: args, encodedBytes: elementary.length, frames: totalFrames });
+
+        const code = await ff.exec(args);
+        if (code !== 0) throw new Error(`Muxing failed (exit ${code}).`);
+        const data = await ff.readFile(outName);
+        const blob = new Blob([data], { type: ecfg.CONTAINERS[cfg.container].mime });
+        try { ff.terminate(); } catch (e) { /* already gone */ }
+        job._wasm = null;
+
+        setProgress(job, 'done', 1);
+        return blob;
+    }
+
+    function concatChunks(chunks, total) {
+        const out = new Uint8Array(total);
+        let o = 0;
+        for (const c of chunks) { out.set(c, o); o += c.length; }
+        return out;
+    }
+
     /* ──────────────────────── stage 2a: server transcode ──────────────────── */
 
     async function transcodeOnServer(job, master) {
@@ -815,18 +1082,63 @@
         // would export the same frozen frame for the whole clip. It needs the
         // server encoder, because assembling an image sequence at an exact
         // frame rate is what makes the timing right.
-        const wantsFrameAccurate = !audioOnly &&
-            options.mode !== 'realtime' &&
-            needsFrameAccurateRender(appState) &&
+        const needsSeek = !audioOnly && options.mode !== 'realtime' && needsFrameAccurateRender(appState);
+        const serverCanDoFrames = needsSeek &&
             registry.server && registry.server.available &&
             backendCanTake(registry, config);
 
+        // With no server, WebCodecs still gives a frame-accurate export: it
+        // encodes each rendered frame in hardware and ffmpeg.wasm only muxes.
+        // Without it the export would fall back to realtime capture, which
+        // cannot wait for a seek and so exports one frozen frame per clip.
+        const webCodecCandidate = needsSeek && !serverCanDoFrames &&
+            typeof VideoEncoder !== 'undefined' &&
+            !!WEBCODEC_CANDIDATES[config.videoCodec] &&
+            ['mp4', 'mkv', 'mov', 'webm'].indexOf(config.container) !== -1;
+
+        let wantsFrameAccurate = serverCanDoFrames;
+        let useWebCodecs = false;
+
+        if (webCodecCandidate) {
+            const w = (config.resolution && config.resolution !== 'source')
+                ? config.resolution.width : options.canvas.width;
+            const h = (config.resolution && config.resolution !== 'source')
+                ? config.resolution.height : options.canvas.height;
+            const probed = await probeWebCodec(config.videoCodec, w, h, config.bitrate,
+                options.fps || (config.frameRate === 'source' ? 30 : config.frameRate) || 30);
+            if (probed) { useWebCodecs = true; wantsFrameAccurate = true; }
+        }
+
         if (wantsFrameAccurate) {
-            job.backend = 'server-ffmpeg-frames';
-            job.captureShare = 0.7;
+            job.backend = useWebCodecs ? 'webcodecs' : 'server-ffmpeg-frames';
+            job.captureShare = useWebCodecs ? 0.75 : 0.7;
+        } else if (needsSeek) {
+            // Nothing frame-accurate is reachable. Say so in the log rather
+            // than silently shipping frozen frames.
+            job.log.push({ t: Date.now(),
+                warning: 'No frame-accurate encoder available (no export server, and WebCodecs cannot encode this format). Falling back to realtime capture, which cannot seek video clips.' });
         }
 
         try {
+            if (wantsFrameAccurate && useWebCodecs) {
+                const out = await renderFramesWithWebCodecs(job, appState, renderFn, {
+                    canvas: options.canvas,
+                    fps: options.fps || (config.frameRate === 'source' ? 30 : config.frameRate) || 30,
+                    duration: job.durationSec,
+                    renderShare: 0.75
+                });
+                job.blob = out;
+                job.bytes = out.size;
+                job.filename = job.filename ||
+                    ecfg.sanitiseFilename(job.name, ecfg.CONTAINERS[config.container].ext);
+                setState(job, 'VALIDATING');
+                job.validation = await validateLocally(out, config, job.durationSec);
+                if (!job.validation.ok) throw new Error(job.validation.problems.join(' '));
+                setProgress(job, 'done', 1);
+                setState(job, 'COMPLETED');
+                return publicViewWithBlob(job);
+            }
+
             if (wantsFrameAccurate) {
                 const out = await renderOfflineFrames(job, appState, renderFn, {
                     canvas: options.canvas,
@@ -921,6 +1233,7 @@
         job.cancelled = true;
         try { job._abort.abort(); } catch (e) {}
         if (job._recorder) { try { job._recorder.stop(); } catch (e) {} }
+        if (job._encoder) { try { job._encoder.close(); } catch (e) {} job._encoder = null; }
         if (job._wasm) { try { job._wasm.terminate(); } catch (e) {} job._wasm = null; }
         if (job._serverJobId) {
             // Tell the server to kill its FFmpeg process and purge the partial
@@ -934,7 +1247,7 @@
 
     const API = { STATES, runExport, cancel, createJob, buildWasmArgs, publicView,
         validateLocally, matchSignature, SIGNATURES,
-        seekAllForRender, needsFrameAccurateRender };
+        seekAllForRender, needsFrameAccurateRender, probeWebCodec, wrapIVF, WEBCODEC_CANDIDATES };
 
     if (typeof window !== 'undefined') {
         window.ForgeCut = window.ForgeCut || {};
