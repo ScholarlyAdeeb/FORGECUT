@@ -192,6 +192,31 @@
         window.dispatchEvent(new CustomEvent('forgecut:ribbonmode', { detail: { mode } }));
     }
 
+    /**
+     * Leaving browser fullscreen returns the ribbon.
+     *
+     * FULLSCREEN hides the ribbon body and the tab strip together, and the
+     * choice is persisted - so without this the user is left with no visible
+     * control that can undo it, on this load or any later one. Esc is the same
+     * way out Word offers from its own full-screen ribbon mode.
+     */
+    document.addEventListener('fullscreenchange', () => {
+        if (!document.fullscreenElement && currentMode() === MODES.FULLSCREEN) {
+            applyMode(MODES.ALWAYS);
+        }
+    });
+
+    // Same escape from the keyboard, for the case where the mode was restored
+    // from storage on a fresh load and the document was never actually
+    // fullscreen, so fullscreenchange never fires.
+    window.addEventListener('keydown', (e) => {
+        if (e.key !== 'Escape') return;
+        if (currentMode() !== MODES.FULLSCREEN) return;
+        const el = document.activeElement;
+        if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA')) return;
+        applyMode(MODES.ALWAYS);
+    });
+
     function applyQat(hidden) {
         document.documentElement.classList.toggle('fc-qat-hidden', !!hidden);
         persist(QAT_KEY, hidden ? '1' : '0');
