@@ -62,7 +62,10 @@ async function handleAssetUpload(file, type) {
                     assetId: asset.id,
                     name: asset.name,
                     startTime: startAt,
-                    duration: Math.min(state.duration, asset.duration || 5.0),
+                    // The whole file. This used to be min(project, file),
+                    // taken BEFORE the project grew to fit, so anything
+                    // longer than a fresh 30 s project was silently cut to 30 s.
+                    duration: asset.duration || 5.0,
                     trimStart: 0,
                     x: canvas.width / 2,
                     y: canvas.height / 2,
@@ -111,7 +114,7 @@ async function handleAssetUpload(file, type) {
                 }
 
                 track.clips.push(newClip);
-                state.duration = Math.max(state.duration, asset.duration || 30.0);
+                state.duration = Math.max(state.duration, startAt + (asset.duration || 5.0));
                 renderTimeline();
                 setTime(0);
             } else if (asset.type === 'audio') {
@@ -121,13 +124,14 @@ async function handleAssetUpload(file, type) {
                     assetId: asset.id,
                     name: asset.name,
                     startTime: nextFreeStartTime(track),
-                    duration: Math.min(state.duration, asset.duration || 5.0),
+                    duration: asset.duration || 5.0,      // whole file (see the video branch)
                     trimStart: 0,
                     volume: 1.0,
                     fadeIn: 0.5,
                     fadeOut: 0.5
                 };
                 track.clips.push(newClip);
+                state.duration = Math.max(state.duration, newClip.startTime + newClip.duration);
                 renderTimeline();
             } else if (asset.type === 'image') {
                 const track = state.tracks.find(t => t.id === 'videoTrack2');
