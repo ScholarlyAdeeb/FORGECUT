@@ -101,6 +101,19 @@ function renderCanvasComposition() {
                         const width = el.videoWidth || el.width || 320;
                         const height = el.videoHeight || el.height || 180;
 
+                        // Effect stack: the compositor returns a processed
+                        // frame the same size as `el`, so everything below
+                        // draws it with unchanged geometry. No effects (or a
+                        // video with no frame yet) leaves src === el — the
+                        // original path, untouched.
+                        let src = el;
+                        if (clip.effects && clip.effects.length && window.ForgeCut.Effects && window.ForgeCut.Compositor &&
+                            !(el.tagName === 'VIDEO' && el.readyState < 2)) {
+                            const stack = window.ForgeCut.Effects.resolveStack(clip.effects,
+                                (key, base) => window.getInterpolatedValue(clip, key, base));
+                            if (stack.length) src = window.ForgeCut.Compositor.process(el, stack);
+                        }
+
                         if (transProgress.active && window.ForgeCut.TransitionEngine) {
                             if (!window._offscreenCanvasFrom) {
                                 window._offscreenCanvasFrom = document.createElement('canvas');
@@ -124,9 +137,9 @@ function renderCanvasComposition() {
                             toCtx.rotate(rotation * Math.PI / 180);
                             toCtx.scale(scale, scale);
                             if (clip.cropX !== undefined && clip.cropY !== undefined && clip.cropW !== undefined && clip.cropH !== undefined) {
-                                toCtx.drawImage(el, clip.cropX, clip.cropY, clip.cropW, clip.cropH, -clip.cropW / 2, -clip.cropH / 2, clip.cropW, clip.cropH);
+                                toCtx.drawImage(src, clip.cropX, clip.cropY, clip.cropW, clip.cropH, -clip.cropW / 2, -clip.cropH / 2, clip.cropW, clip.cropH);
                             } else {
-                                toCtx.drawImage(el, -width / 2, -height / 2);
+                                toCtx.drawImage(src, -width / 2, -height / 2);
                             }
                             toCtx.restore();
 
@@ -152,9 +165,9 @@ function renderCanvasComposition() {
                             ctx.filter = `blur(${blurVal}px) brightness(${brightnessVal}) contrast(${contrastVal}) saturate(${saturationVal}) hue-rotate(${hueVal}deg)`;
 
                             if (clip.cropX !== undefined && clip.cropY !== undefined && clip.cropW !== undefined && clip.cropH !== undefined) {
-                                ctx.drawImage(el, clip.cropX, clip.cropY, clip.cropW, clip.cropH, -clip.cropW / 2, -clip.cropH / 2, clip.cropW, clip.cropH);
+                                ctx.drawImage(src, clip.cropX, clip.cropY, clip.cropW, clip.cropH, -clip.cropW / 2, -clip.cropH / 2, clip.cropW, clip.cropH);
                             } else {
-                                ctx.drawImage(el, -width / 2, -height / 2);
+                                ctx.drawImage(src, -width / 2, -height / 2);
                             }
                             ctx.filter = 'none';
                         }

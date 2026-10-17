@@ -166,6 +166,72 @@
             }));
         }
 
+        /* Effects — the shared effect stack, run on the GPU compositor. */
+        const FXE = window.ForgeCut && window.ForgeCut.Effects;
+        if (FXE && (kind === 'video' || kind === 'image')) {
+            host.append(group('Effects', 'fxstack', (b) => {
+                const stack = Array.isArray(clip.effects) ? clip.effects : [];
+                const iconBtn = (sym, title, onClick, disabled) => {
+                    const btn = el('button', 'mac-fx-icon');
+                    btn.type = 'button';
+                    btn.title = title;
+                    btn.setAttribute('aria-label', title);
+                    btn.disabled = !!disabled;
+                    const s = el('span', 'material-symbols-outlined', sym);
+                    s.setAttribute('aria-hidden', 'true');
+                    btn.append(s);
+                    btn.addEventListener('click', onClick);
+                    return btn;
+                };
+                stack.forEach((fx, i) => {
+                    const def = FXE.EFFECTS[fx.type];
+                    const card = el('div', 'mac-fx' + (fx.enabled ? '' : ' off'));
+                    const top = el('div', 'mac-fx-head');
+                    const on = el('input');
+                    on.type = 'checkbox';
+                    on.checked = !!fx.enabled;
+                    on.disabled = !def;
+                    on.setAttribute('aria-label', 'Enable ' + (def ? def.label : fx.type));
+                    on.addEventListener('change', () => window.fxToggle(clip.id, fx.id));
+                    top.append(on, el('span', 'mac-fx-name', def ? def.label : `Unsupported: ${fx.type}`),
+                        iconBtn('arrow_upward', 'Move Up', () => window.fxMove(clip.id, fx.id, -1), i === 0),
+                        iconBtn('arrow_downward', 'Move Down', () => window.fxMove(clip.id, fx.id, 1), i === stack.length - 1),
+                        iconBtn('delete', 'Remove Effect', () => window.fxRemove(clip.id, fx.id)));
+                    card.append(top);
+                    if (def) {
+                        Object.entries(def.params).forEach(([name, spec]) => {
+                            const input = el('input', 'mac-range');
+                            input.type = 'range';
+                            input.min = spec.min; input.max = spec.max; input.step = spec.step;
+                            input.value = window.fxValue(clip, fx, name);
+                            const val = el('span', 'val', String(Math.round(input.value * 100) / 100));
+                            input.addEventListener('input', () => {
+                                val.textContent = String(Math.round(input.value * 100) / 100);
+                                window.fxSetParam(clip.id, fx.id, name, input.value, 'input');
+                            });
+                            input.addEventListener('change', () => window.fxSetParam(clip.id, fx.id, name, input.value, 'commit'));
+                            const kfOn = window.fxHasKeyframeHere(clip, fx, name);
+                            const kfb = iconBtn('change_history', kfOn ? 'Remove Keyframe' : 'Add Keyframe',
+                                () => window.fxToggleKeyframe(clip.id, fx.id, name));
+                            if (kfOn) kfb.classList.add('on');
+                            const ctl = el('div', 'mac-row2');
+                            ctl.append(input, val, kfb);
+                            card.append(field(spec.label, ctl));
+                        });
+                    }
+                    b.append(card);
+                });
+                const add = el('select', 'mac-select');
+                add.setAttribute('aria-label', 'Add Effect');
+                const first = el('option', null, 'Add Effect…');
+                first.value = '';
+                add.append(first);
+                Object.entries(FXE.EFFECTS).forEach(([k, d]) => { const o = el('option', null, d.label); o.value = k; add.append(o); });
+                add.addEventListener('change', () => { if (add.value) window.fxAdd(clip.id, add.value); });
+                b.append(field(stack.length ? '' : 'None', add));
+            }));
+        }
+
         /* Text */
         if (typeof clip.text === 'string') {
             host.append(group('Text', 'text', (b) => {

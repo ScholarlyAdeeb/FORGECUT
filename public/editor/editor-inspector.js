@@ -333,6 +333,56 @@ function updateInspector() {
         `;
     }
 
+    // Effect stack (GPU compositor). Runs top to bottom on the clip's frame.
+    let fxStackHtml = '';
+    const FXE = window.ForgeCut && window.ForgeCut.Effects;
+    if (FXE && (track.type === 'video' || track.type === 'image')) {
+        const esc = (v) => String(v).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]);
+        const stack = Array.isArray(clip.effects) ? clip.effects : [];
+        const rows = stack.map((fx, i) => {
+            const def = FXE.EFFECTS[fx.type];
+            if (!def) {
+                return `<div class="text-[10px] text-on-surface-variant border border-outline-variant/30 rounded p-2">Unsupported effect "${esc(fx.type)}" (kept, not applied)
+                    <button class="material-symbols-outlined text-sm float-right" title="Remove" onclick="fxRemove('${clip.id}','${fx.id}')">delete</button></div>`;
+            }
+            const params = Object.entries(def.params).map(([name, spec]) => {
+                const val = window.fxValue(clip, fx, name);
+                const on = window.fxHasKeyframeHere(clip, fx, name);
+                return `
+                <div>
+                    <div class="flex justify-between text-[10px] text-on-surface-variant mb-0.5">
+                        <span><span class="material-symbols-outlined kf-toggle${on ? ' kf-active' : ''} select-none align-middle" title="Toggle Keyframe"
+                            onclick="fxToggleKeyframe('${clip.id}','${fx.id}','${name}')">change_history</span> ${esc(spec.label)}</span>
+                        <span>${Math.round(val * 100) / 100}</span>
+                    </div>
+                    <input type="range" data-history="self" class="w-full" min="${spec.min}" max="${spec.max}" step="${spec.step}" value="${val}"
+                        oninput="fxSetParam('${clip.id}','${fx.id}','${name}',this.value,'input')"
+                        onchange="fxSetParam('${clip.id}','${fx.id}','${name}',this.value,'commit')">
+                </div>`;
+            }).join('');
+            return `
+            <div class="border border-outline-variant/30 rounded p-2 flex flex-col gap-1.5${fx.enabled ? '' : ' opacity-50'}">
+                <div class="flex items-center gap-1 text-[11px]">
+                    <input type="checkbox" data-history="self" ${fx.enabled ? 'checked' : ''} title="Enable" onchange="fxToggle('${clip.id}','${fx.id}')">
+                    <span class="font-semibold text-on-surface flex-1">${i + 1}. ${esc(def.label)}</span>
+                    <button class="material-symbols-outlined text-sm text-on-surface-variant hover:text-on-surface bg-transparent border-none" title="Move up" ${i === 0 ? 'disabled' : ''} onclick="fxMove('${clip.id}','${fx.id}',-1)">arrow_upward</button>
+                    <button class="material-symbols-outlined text-sm text-on-surface-variant hover:text-on-surface bg-transparent border-none" title="Move down" ${i === stack.length - 1 ? 'disabled' : ''} onclick="fxMove('${clip.id}','${fx.id}',1)">arrow_downward</button>
+                    <button class="material-symbols-outlined text-sm text-on-surface-variant hover:text-error bg-transparent border-none" title="Remove" onclick="fxRemove('${clip.id}','${fx.id}')">delete</button>
+                </div>
+                ${params}
+            </div>`;
+        }).join('');
+        const options = Object.entries(FXE.EFFECTS).map(([k, d]) => `<option value="${k}">${esc(d.label)}</option>`).join('');
+        fxStackHtml = `
+            <div class="flex flex-col gap-2">
+                ${rows || '<div class="text-[10px] text-on-surface-variant">No effects. Effects run top to bottom on this clip.</div>'}
+                <select data-history="self" class="w-full text-[11px] bg-surface-container border border-outline-variant/40 rounded px-1 py-0.5"
+                    onchange="if (this.value) { fxAdd('${clip.id}', this.value); }">
+                    <option value="">+ Add effect…</option>${options}
+                </select>
+            </div>`;
+    }
+
     // Effects properties
     if (track.type === 'video' || track.type === 'image') {
         const asset = (window.ForgeCut && window.ForgeCut.MediaEngine)
@@ -520,6 +570,7 @@ function updateInspector() {
     if (textHtml) finalHtml += renderSection('Text', 'text', textHtml);
     if (audioHtml) finalHtml += renderSection('Audio', 'audio', audioHtml);
     if (effectsHtml) finalHtml += renderSection('Effects', 'effects', effectsHtml);
+    if (fxStackHtml) finalHtml += renderSection('Effect Stack', 'fxstack', fxStackHtml);
     if (animationHtml) finalHtml += renderSection('Animation', 'animation', animationHtml);
 
     finalHtml += `<button class="w-full py-1.5 bg-red-600 text-white rounded font-medium mt-3 border-none cursor-pointer hover:bg-red-700 transition-colors" id="insp_delete">Delete Clip</button>`;
@@ -741,9 +792,11 @@ function updateInspector() {
         });
     }
 
-    // Auto-save history on change for all inspector inputs
+    // Auto-save history on change for all inspector inputs. Controls marked
+    // data-history="self" record their own undo step correctly (before the
+    // change) and must not get a second, after-the-change snapshot here.
     if (inspectorSection) {
-        inspectorSection.querySelectorAll('input, select').forEach(input => {
+        inspectorSection.querySelectorAll('input:not([data-history="self"]), select:not([data-history="self"])').forEach(input => {
             input.addEventListener('change', (e) => {
                 saveStateToHistory(`Edit ${input.id || 'Property'}`);
             });

@@ -57,6 +57,9 @@ platform reaches into another. Run it before committing UI work.
 | `MediaEngine.js` | media elements | import, decode, thumbnails, waveforms |
 | `ExportEngine.js` | canvas / ffmpeg | |
 | `PlaybackEngine.js` | media elements | reports transport via an event, see below |
+| `Effects.js` | none | pure: effect stack model, params, CPU reference |
+| `Compositor.js` | OffscreenCanvas / WebGL2 | runs effect stacks on the GPU, see below |
+| `SmartEdit.js`, `Captions.js`, `Reframe.js` | none | pure: silence, scenes, captions, reframe maths |
 
 None of these reference a platform's DOM. `PlaybackEngine` used to write
 directly into the Ribbon's transport icons; it now emits:
@@ -69,6 +72,38 @@ window.addEventListener('forgecut:transport', (e) => {
 
 Each platform decides how to render that. The Windows listener lives in
 `editor/editor-transport.js`.
+
+## Effects and the GPU compositor
+
+A video or image clip may carry `clip.effects`, an ordered stack:
+
+```json
+[{ "id": "fx_ab12", "type": "adjust", "enabled": true, "params": { "brightness": 1.2 } }]
+```
+
+- **One render path.** `renderCanvasComposition` is still the only entry
+  point. For a clip with a non-empty, non-neutral stack it hands the source
+  frame to `Compositor.process()`, which returns a surface **the same size as
+  the source**. The existing crop/position/scale code then draws that instead
+  of the raw element. A clip without effects takes exactly the old path.
+- **Export-safe.** The compositor renders into an `OffscreenCanvas`, never
+  needs a visible canvas or `requestAnimationFrame`, and does no `readPixels`.
+- **Colour space: sRGB-encoded values, 0..1**, the same space as `ctx.filter`.
+  Measured in Chrome: the GPU `adjust` matches `ctx.filter` within 3/255
+  (mean 0.67). An effect that needs linear light must convert inside its own
+  pass and say so.
+- **Keyframes.** Every numeric param is animatable as `fx.<effectId>.<param>`
+  in `clip.keyframes`, so effects split, ripple, undo and export with no extra
+  code.
+- **Parity gate.** `Effects.applyReference` defines each effect on the CPU.
+  `Compositor.selfTest()` renders a fixed test card through both and compares
+  against `Compositor.TOLERANCE` (max 3, mean 0.75 per 8-bit channel). It runs
+  once per device on first use, and any effect type that fails is routed to
+  the CPU on that device. Without WebGL2 the whole stack runs on the CPU:
+  slower, same result.
+- **Adding an effect** = an entry in `Effects.EFFECTS`, a reference function,
+  a shader pass in `Compositor.js`, and a self-test case. Both inspectors build
+  their controls from the param schema, so no UI work is needed per effect.
 
 ## Windows — `public/platform/windows/`
 

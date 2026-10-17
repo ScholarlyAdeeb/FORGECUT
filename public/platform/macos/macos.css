@@ -704,6 +704,30 @@ body.mac {
 .mac-range { width: 100%; accent-color: var(--mac-blue); }
 .mac-row2 { display: flex; align-items: center; gap: var(--s2); }
 
+/* Effect stack cards: one rounded inset per effect, in stack order. */
+.mac-fx {
+    display: grid;
+    gap: var(--s1);
+    padding: var(--s2);
+    border: 0.5px solid var(--separator-strong);
+    border-radius: calc(var(--r-sm) + 3px);
+    background: var(--control-bg);
+}
+.mac-fx.off { opacity: 0.55; }
+.mac-fx-head { display: flex; align-items: center; gap: var(--s1); }
+.mac-fx-name { flex: 1; font-size: var(--t-label); font-weight: 600; color: var(--label-1); }
+.mac-fx-icon {
+    display: inline-grid; place-items: center;
+    width: 20px; height: 20px; padding: 0;
+    background: none; border: none; border-radius: var(--r-sm);
+    color: var(--label-2); cursor: default;
+}
+.mac-fx-icon .material-symbols-outlined { font-size: 15px; }
+.mac-fx-icon:hover:not(:disabled) { background: var(--control-bg-hover); color: var(--label-1); }
+.mac-fx-icon:disabled { color: var(--label-3); }
+.mac-fx-icon.on { color: var(--mac-blue); }
+.mac-fx-icon:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--mac-blue) 25%, transparent); }
+
 /* ── Menus, popovers, sheets ────────────────────────────────────────────── */
 .mac-popover {
     position: fixed;
