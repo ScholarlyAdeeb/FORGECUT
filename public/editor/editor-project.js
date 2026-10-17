@@ -264,6 +264,48 @@
         replay();
     };
 
+    /**
+     * One correct undo entry per inspector edit, for every control at once.
+     *
+     * Inspector controls mutate the clip in their own 'input'/'change'
+     * handlers. Saving history afterwards (what both inspectors used to do)
+     * records the NEW value, so the first Undo appeared to do nothing. This
+     * listens on the container instead: in the CAPTURE phase, which runs
+     * before the control's own handler, it snapshots on the first event of
+     * an edit; on the bubbling 'change', after the handler, it commits that
+     * snapshot. A slider drag or a typed field is one entry.
+     *
+     * Controls that manage their own history opt out with data-history="self".
+     * Installed once per container; safe to call on every inspector refresh.
+     */
+    window.wireInspectorHistory = function (container, labelFor) {
+        if (!container || container.__fcHistoryWired) return;
+        container.__fcHistoryWired = true;
+        const HM = () => window.ForgeCut && window.ForgeCut.HistoryManager;
+        const pending = new Map();
+        const eligible = (t) => t && t.matches && t.matches('input, select, textarea') &&
+            !(t.dataset && t.dataset.history === 'self') && t.type !== 'file';
+        const keyOf = (t) => t.id || t.name || t;
+        const begin = (e) => {
+            const t = e.target;
+            if (!eligible(t) || !HM()) return;
+            const k = keyOf(t);
+            if (!pending.has(k)) pending.set(k, HM().capture());
+        };
+        container.addEventListener('input', begin, true);
+        container.addEventListener('change', begin, true);
+        container.addEventListener('change', (e) => {
+            const t = e.target;
+            if (!eligible(t)) return;
+            const k = keyOf(t);
+            const snap = pending.get(k);
+            pending.delete(k);
+            if (!snap || !HM()) return;
+            state.isDirty = true;
+            HM().commitCaptured(snap, labelFor ? labelFor(t) : 'Edit Property');
+        }, false);
+    };
+
     window.triggerUndo = function () {
         if (window.ForgeCut && window.ForgeCut.HistoryManager) {
             window.ForgeCut.HistoryManager.undo();

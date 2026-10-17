@@ -148,7 +148,7 @@ function updateInspector() {
             appearanceHtml += `
                 <div class="control-group">
                     <label>Layer (Track)</label>
-                    <select id="insp_track" onchange="moveClipToTrack('${clip.id}', this.value)" class="w-full bg-[#1e1e2e] border border-white/10 rounded p-1 text-xs text-white">
+                    <select id="insp_track" data-history="self" onchange="moveClipToTrack('${clip.id}', this.value)" class="w-full bg-[#1e1e2e] border border-white/10 rounded p-1 text-xs text-white">
                         ${compatibleTracks.map(t => `<option value="${t.id}" ${t.id === track.id ? 'selected' : ''}>${t.name}</option>`).join('')}
                     </select>
                 </div>
@@ -300,7 +300,7 @@ function updateInspector() {
                 <input type="range" id="insp_balance" min="-100" max="100" value="${Math.round((clip.balance !== undefined ? clip.balance : 0) * 100)}">
             </div>
             <div class="control-group flex items-center gap-2 mt-2">
-                <input type="checkbox" id="insp_normalize" ${clip.normalize ? 'checked' : ''} onchange="window.toggleClipNormalize('${clip.id}', this.checked)">
+                <input type="checkbox" id="insp_normalize" ${clip.normalize ? 'checked' : ''} data-history="self" onchange="window.toggleClipNormalize('${clip.id}', this.checked)">
                 <label for="insp_normalize" class="text-xs font-semibold">Normalize Volume</label>
             </div>
             <div class="control-group border-t border-white/10 pt-2 mt-2">
@@ -792,15 +792,13 @@ function updateInspector() {
         });
     }
 
-    // Auto-save history on change for all inspector inputs. Controls marked
-    // data-history="self" record their own undo step correctly (before the
-    // change) and must not get a second, after-the-change snapshot here.
-    if (inspectorSection) {
-        inspectorSection.querySelectorAll('input:not([data-history="self"]), select:not([data-history="self"])').forEach(input => {
-            input.addEventListener('change', (e) => {
-                saveStateToHistory(`Edit ${input.id || 'Property'}`);
-            });
-        });
+    // Undo for every inspector control: one entry per edit, snapshotted
+    // BEFORE the control's handler changes anything. See wireInspectorHistory.
+    // (This used to save after each 'change', recording the new value, so the
+    // first Undo after an inspector edit appeared to do nothing.)
+    if (inspectorSection && window.wireInspectorHistory) {
+        window.wireInspectorHistory(inspectorSection,
+            (t) => 'Edit ' + String(t.id || 'Property').replace(/^insp_/, '').replace(/_/g, ' '));
     }
 
     const deleteBtn = document.getElementById('insp_delete');

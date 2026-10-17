@@ -263,6 +263,8 @@
         const clip = findClipById(clipId);
         if (!clip) return;
 
+        // History before the mutation, or undo restores the toggled state.
+        saveStateToHistory('Toggle Keyframe');
         if (!clip.keyframes) clip.keyframes = {};
         if (!clip.keyframes[propertyName]) clip.keyframes[propertyName] = [];
 
@@ -278,7 +280,6 @@
 
         renderCanvasComposition();
         updateInspector();
-        saveStateToHistory('Toggle Keyframe');
     };
 
     window.getInterpolatedValue = function (clip, propertyName, defaultValue) {
@@ -306,9 +307,9 @@
     window.toggleClipNormalize = function (clipId, checked) {
         const clip = findClipById(clipId);
         if (clip) {
-            clip.normalize = !!checked;
+            // Snapshot before the change, or undo restores the new value.
+            withHistory('Toggle Normalize', () => { clip.normalize = !!checked; });
             syncMediaPlayback();
-            saveStateToHistory('Toggle Normalize');
         }
     };
 

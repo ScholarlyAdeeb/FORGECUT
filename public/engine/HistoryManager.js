@@ -165,6 +165,25 @@
         return true;
     }
 
+    /**
+     * Snapshot the current state WITHOUT pushing it, for an edit that is about
+     * to happen; push it with commitCaptured() once the edit is done. This is
+     * how a control whose handler mutates state can still get a correct undo
+     * entry: capture before its handler runs, commit after.
+     */
+    function capture() {
+        return _stateRef ? cloneState(_stateRef) : null;
+    }
+
+    function commitCaptured(snapshot, label) {
+        if (!snapshot) return;
+        snapshot._label = label || 'Action';
+        snapshot._timestamp = Date.now();
+        _undoStack.push(snapshot);
+        if (_undoStack.length > MAX_STACK_SIZE) _undoStack.shift();
+        _redoStack = [];
+    }
+
     function canUndo() { return _undoStack.length > 0; }
     function canRedo() { return _redoStack.length > 0; }
 
@@ -185,6 +204,7 @@
     window.ForgeCut.HistoryManager = {
         bindState,
         pushState, pushStateDebounced,
+        capture, commitCaptured,
         undo, redo,
         canUndo, canRedo,
         clearHistory,

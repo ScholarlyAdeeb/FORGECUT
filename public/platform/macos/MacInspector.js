@@ -54,9 +54,13 @@
         return row;
     }
 
-    /** Commit a change the same way the shared layer does. */
+    /**
+     * Finish an edit: repaint. The undo entry is recorded by
+     * wireInspectorHistory on the inspector host, which snapshots BEFORE the
+     * control's handler runs. (Saving here, after the change, recorded the new
+     * value, so the first Undo appeared to do nothing.)
+     */
     function commit(label) {
-        if (typeof saveStateToHistory === 'function') saveStateToHistory(label);
         if (typeof renderCanvasComposition === 'function') renderCanvasComposition();
         if (window.MacUI.timeline) window.MacUI.timeline.invalidate();
     }
@@ -98,6 +102,12 @@
     Mac.renderInspector = function () {
         const host = document.getElementById('macInspector');
         if (!host) return;
+        if (window.wireInspectorHistory) {
+            window.wireInspectorHistory(host, (t) => {
+                const l = t.id && host.querySelector(`label[for="${t.id}"]`);
+                return 'Edit ' + (l && l.textContent ? l.textContent : 'Property');
+            });
+        }
         host.replaceChildren();
 
         const clip = (window.state && state.selectedClipId && typeof findClipById === 'function')
@@ -189,6 +199,7 @@
                     const top = el('div', 'mac-fx-head');
                     const on = el('input');
                     on.type = 'checkbox';
+                    on.dataset.history = 'self';      // fxToggle records its own undo step
                     on.checked = !!fx.enabled;
                     on.disabled = !def;
                     on.setAttribute('aria-label', 'Enable ' + (def ? def.label : fx.type));
@@ -202,6 +213,7 @@
                         Object.entries(def.params).forEach(([name, spec]) => {
                             const input = el('input', 'mac-range');
                             input.type = 'range';
+                            input.dataset.history = 'self';   // fxSetParam commits one step per drag
                             input.min = spec.min; input.max = spec.max; input.step = spec.step;
                             input.value = window.fxValue(clip, fx, name);
                             const val = el('span', 'val', String(Math.round(input.value * 100) / 100));
@@ -222,6 +234,7 @@
                     b.append(card);
                 });
                 const add = el('select', 'mac-select');
+                add.dataset.history = 'self';
                 add.setAttribute('aria-label', 'Add Effect');
                 const first = el('option', null, 'Add Effect…');
                 first.value = '';
@@ -292,6 +305,7 @@
                 if ((clip.transition || 'None') === n) o.selected = true;
                 sel.appendChild(o);
             });
+            sel.dataset.history = 'self';     // setTransition records its own undo step
             sel.addEventListener('change', () => {
                 if (typeof setTransition === 'function') setTransition(sel.value);
                 else { clip.transition = sel.value; commit('Set Transition'); }
