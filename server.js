@@ -32,6 +32,13 @@ app.use((req, res, next) => {
 // size, and never accepts a filesystem path or command string from the client.
 app.use('/api/export', exportApi.createRouter());
 
+// Hosted transcription — the same handler Vercel runs from api/, mounted here
+// so local development behaves like the deployment. Needs HF_TOKEN in the
+// environment; without it the endpoint reports itself unavailable and the
+// app transcribes in the browser.
+const transcribeHandler = require('./api/transcribe.js');
+app.all(['/api/transcribe', '/api/transcribe/'], (req, res) => transcribeHandler(req, res));
+
 // Reject anything but safe read methods before it reaches the static handlers.
 app.use((req, res, next) => {
     if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') return next();

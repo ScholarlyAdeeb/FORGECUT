@@ -240,8 +240,69 @@
             .join('\n');
     }
 
+    /* ── hosted transcription helpers ────────────────────────────────── */
+
+    /**
+     * Split mono audio into chunks of at most `maxSec`, cutting at the
+     * quietest 50 ms within the last `searchSec` of each window so a cut never
+     * lands mid-word. → [{ start, end }] in samples, contiguous and covering
+     * everything.
+     */
+    function planChunks(samples, sampleRate, maxSec, searchSec) {
+        const max = Math.floor((maxSec || 110) * sampleRate);
+        const search = Math.floor((searchSec || 8) * sampleRate);
+        const win = Math.max(1, Math.floor(0.05 * sampleRate));
+        const out = [];
+        let start = 0;
+        while (samples.length - start > max) {
+            const hardEnd = start + max;
+            let best = hardEnd, bestE = Infinity;
+            for (let w = Math.max(start + 1, hardEnd - search); w + win <= hardEnd; w += win) {
+                let e = 0;
+                for (let i = w; i < w + win; i++) e += samples[i] * samples[i];
+                if (e < bestE) { bestE = e; best = w + (win >> 1); }
+            }
+            out.push({ start, end: best });
+            start = best;
+        }
+        out.push({ start, end: samples.length });
+        return out.filter(c => c.end > c.start);
+    }
+
+    /** Float mono samples → 16-bit PCM WAV bytes. */
+    function encodeWav16(samples, sampleRate) {
+        const n = samples.length, buf = new ArrayBuffer(44 + n * 2), v = new DataView(buf);
+        const w = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+        w(0, 'RIFF'); v.setUint32(4, 36 + n * 2, true); w(8, 'WAVE');
+        w(12, 'fmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+        v.setUint32(24, sampleRate, true); v.setUint32(28, sampleRate * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+        w(36, 'data'); v.setUint32(40, n * 2, true);
+        for (let i = 0; i < n; i++) {
+            const s = Math.max(-1, Math.min(1, samples[i]));
+            v.setInt16(44 + i * 2, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+        }
+        return new Uint8Array(buf);
+    }
+
+    /**
+     * Words from a hosted response chunk: word-level chunks pass through;
+     * segment-level ones are spread across their words like an SRT cue.
+     */
+    function wordsFromHosted(resp, offset) {
+        const off = offset || 0;
+        if (!resp || !Array.isArray(resp.chunks)) return [];
+        if (resp.granularity === 'word') return wordsFromChunks(resp.chunks, off);
+        const cues = resp.chunks.map((c, i) => {
+            const s = c.timestamp[0];
+            let e = c.timestamp[1];
+            if (e == null || !(e > s)) { const nx = resp.chunks[i + 1]; e = nx && nx.timestamp[0] > s ? nx.timestamp[0] : s + 2; }
+            return { start: s + off, end: e + off, text: String(c.text).trim() };
+        });
+        return cuesToWords(cues);
+    }
+
     const API = {
-        STYLES, GROUP_DEFAULTS,
+        STYLES, GROUP_DEFAULTS, planChunks, encodeWav16, wordsFromHosted,
         parseTimestamp, parseSubtitles, cuesToWords, wordsFromChunks, groupWords, buildCaptionClips, restyledText, toSRT
     };
 

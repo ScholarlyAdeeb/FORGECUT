@@ -83,9 +83,50 @@
         return fcConfirm('This project already has captions. Replace them?', { okLabel: 'Replace', cancelLabel: 'Cancel' });
     }
 
+    /* ── hosted transcription (api/transcribe) ───────────────────────── */
+
+    const HOSTED_URL = '/api/transcribe';
+    let hostedProbe = null, hostedProbeAt = 0;
+
+    /** Is the hosted (server-side Whisper) path configured here? Cached for a minute. */
+    function hostedAvailable() {
+        if (hostedProbe && Date.now() - hostedProbeAt < 60000) return hostedProbe;
+        hostedProbeAt = Date.now();
+        hostedProbe = fetch(HOSTED_URL, { headers: { Accept: 'application/json' } })
+            .then(r => (r.ok ? r.json() : null))
+            .then(j => (j && j.available ? j : null))
+            .catch(() => null);
+        return hostedProbe;
+    }
+    window.smartHostedCaptions = hostedAvailable;
+
+    /**
+     * Transcribe on the server. The audio is cut at quiet points into chunks
+     * that fit the platform's request limit, sent one at a time, and the
+     * word timings are shifted back onto the project's timeline.
+     */
+    async function transcribeHosted(mono, sampleRate, info, language, onProgress) {
+        const maxSec = Math.min(110, (info.maxSeconds || 120) - 5);
+        const chunks = CAP().planChunks(mono, sampleRate, maxSec, 8);
+        const words = [];
+        for (let i = 0; i < chunks.length; i++) {
+            const c = chunks[i];
+            onProgress && onProgress(i, chunks.length);
+            const wav = CAP().encodeWav16(mono.subarray(c.start, c.end), sampleRate);
+            const q = language && language !== 'auto' ? `?language=${encodeURIComponent(language)}` : '';
+            const res = await fetch(HOSTED_URL + q, { method: 'POST', headers: { 'Content-Type': 'audio/wav' }, body: new Blob([wav], { type: 'audio/wav' }) });
+            const body = await res.json().catch(() => ({}));
+            if (!res.ok) throw Object.assign(new Error(body.error || `Hosted transcription failed (${res.status}).`), { status: res.status });
+            words.push(...CAP().wordsFromHosted(body, c.start / sampleRate));
+        }
+        return words;
+    }
+
     window.smartAutoCaptions = async function (opts) {
         if (busy || !CAP()) return;
-        const o = Object.assign({ quality: 'fast', style: 'bold', language: 'auto', maxWords: 3 }, opts || {});
+        // quality: 'auto' (hosted when configured, else in-browser 'fast'),
+        // 'hosted', 'fast' or 'accurate' (in-browser).
+        const o = Object.assign({ quality: 'auto', style: 'bold', language: 'auto', maxWords: 3 }, opts || {});
         const AE = window.ForgeCut && window.ForgeCut.AudioEngine;
         let end = 0;
         state.tracks.forEach(t => { if (t.type === 'audio') t.clips.forEach(c => { end = Math.max(end, c.startTime + c.duration); }); });
@@ -102,21 +143,44 @@
             for (let i = 0; i < buf.numberOfChannels; i++) chans.push(buf.getChannelData(i));
             const mono = Float32Array.from(SE() ? SE().mixToMono(chans) : chans[0]);
 
-            let lastShown = 0;
-            const result = await transcribe(mono, o, (p) => {
-                const now = Date.now();
-                // Cache hits report tiny totals; only a real download is worth a toast.
-                if (now - lastShown < 1500 || !(p.total > 5 * 1048576)) return;
-                lastShown = now;
-                fcToast(`Downloading speech model… ${mb(p.loaded)} of ${mb(p.total)} (first time only)`);
-            });
-            const words = CAP().wordsFromChunks(result.chunks);
+            let words = null, via = 'browser';
+            if (o.quality === 'auto' || o.quality === 'hosted') {
+                const info = await hostedAvailable();
+                if (info) {
+                    try {
+                        fcToast('Transcribing on the server…');
+                        words = await transcribeHosted(mono, 16000, info, o.language, (i, n) => {
+                            if (n > 1) fcToast(`Transcribing on the server… part ${i + 1} of ${n}`);
+                        });
+                        via = 'server';
+                    } catch (e) {
+                        // Quota, cold start, outage: the browser model still works.
+                        console.warn('[ForgeCut] hosted transcription failed, using the browser:', e && e.message);
+                        fcToast(`${e && e.message ? e.message : 'Server transcription failed'} Transcribing in the browser instead…`);
+                        words = null;
+                    }
+                } else if (o.quality === 'hosted') {
+                    fcToast('Server transcription is not set up here; transcribing in the browser.');
+                }
+            }
+            if (!words) {
+                let lastShown = 0;
+                const browserQuality = o.quality === 'accurate' ? 'accurate' : 'fast';
+                const result = await transcribe(mono, Object.assign({}, o, { quality: browserQuality }), (p) => {
+                    const now = Date.now();
+                    // Cache hits report tiny totals; only a real download is worth a toast.
+                    if (now - lastShown < 1500 || !(p.total > 5 * 1048576)) return;
+                    lastShown = now;
+                    fcToast(`Downloading speech model… ${mb(p.loaded)} of ${mb(p.total)} (first time only)`);
+                });
+                words = CAP().wordsFromChunks(result.chunks);
+            }
             if (words.length === 0) { fcToast('No speech found.'); return; }
             const pages = CAP().groupWords(words, { maxWords: o.maxWords });
             const { w, h } = canvasSize();
             const clips = CAP().buildCaptionClips(pages, { style: o.style, canvasWidth: w, canvasHeight: h });
             placeCaptions(clips, 'Auto Captions');
-            fcToast(`Added ${clips.length} captions (${words.length} words).`);
+            fcToast(`Added ${clips.length} captions (${words.length} words, ${via === 'server' ? 'server' : 'in browser'}).`);
         } catch (e) {
             console.error('[ForgeCut] auto captions failed', e);
             fcToast('Auto captions failed: ' + (e && e.message || e));

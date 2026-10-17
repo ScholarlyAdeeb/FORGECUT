@@ -121,6 +121,12 @@ npm run preview:static   # serve dist/ exactly as Vercel will, on :4173
 
 `vercel.json` runs the same build and sets the cross-origin isolation headers FFmpeg.wasm needs. No serverless functions are used: exports run through WebCodecs and FFmpeg.wasm, and every analysis tool runs in the browser.
 
+#### Hosted transcription (optional)
+
+Auto Captions can run a larger Whisper model on Hugging Face instead of in the browser. Set `HF_TOKEN` (a Hugging Face token with Inference Providers permission) in Vercel → Project → Settings → Environment Variables; see `.env.example` for the optional settings. The token stays on the server: the browser calls `/api/transcribe` (a Vercel function in `api/`), which calls Hugging Face. Long audio is sent in chunks of up to 110 s, cut at pauses, to stay under Vercel's 4.5 MB request limit. Without a token, or if the server refuses (quota, cold start, outage), captions fall back to the in-browser model automatically.
+
+The rate limit is per server instance (a speed bump, not a quota). For a hard cap, back it with a shared store such as Upstash/Vercel KV.
+
 ### Self-hosted Node (optional)
 
 `npm start` runs `server.js`, which adds server-side FFmpeg: faster frame-sequence exports, ProRes/FFV1 masters, and FFmpeg scene detection. The client uses it automatically when it can reach it, and falls back when it cannot.
