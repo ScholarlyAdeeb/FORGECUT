@@ -330,9 +330,28 @@
         return parts.join(' · ');
     }
 
+    /**
+     * The concrete frame size for exporting a canvas of canvasW x canvasH.
+     *
+     * A preset's {width, height} is a size CLASS ("1080p"), not a shape. It
+     * used to be applied literally, so a 9:16 short exported with the default
+     * 1920x1080 preset was stretched into landscape. Here the bound follows
+     * the canvas's orientation and the canvas aspect is preserved: 1080x1920
+     * stays 1080x1920, a square canvas becomes 1080x1080. Never upscales past
+     * the bound; always even, for 4:2:0.
+     */
+    function fitResolution(resolution, canvasW, canvasH) {
+        if (!resolution || resolution === 'source' || !(canvasW > 0 && canvasH > 0)) return resolution;
+        const even = (n) => Math.max(2, Math.round(n / 2) * 2);
+        let bw = resolution.width, bh = resolution.height;
+        if ((canvasW >= canvasH) !== (bw >= bh)) { const t = bw; bw = bh; bh = t; }
+        const k = Math.min(bw / canvasW, bh / canvasH);
+        return { width: even(canvasW * k), height: even(canvasH * k) };
+    }
+
     const API = {
         CONTAINERS, VIDEO_CODECS, AUDIO_CODECS, PRESETS, DEFAULTS,
-        normalise, validate, fromPreset, sanitiseFilename, dedupeFilenames, describe,
+        normalise, validate, fromPreset, sanitiseFilename, dedupeFilenames, describe, fitResolution,
         isAudioOnly: (container) => !!CONTAINERS[container] && CONTAINERS[container].video === null
     };
 

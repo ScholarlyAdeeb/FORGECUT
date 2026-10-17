@@ -1042,6 +1042,12 @@
         const config = options.config
             ? ecfg.normalise(options.config)
             : ecfg.fromPreset(options.preset || 'web-compat');
+        // Resolve the preset's size class against THIS canvas once, so every
+        // backend (server, wasm, WebCodecs) receives the same concrete,
+        // aspect-correct size instead of stretching to a fixed landscape box.
+        if (options.canvas && ecfg.fitResolution) {
+            config.resolution = ecfg.fitResolution(config.resolution, options.canvas.width, options.canvas.height);
+        }
 
         const job = createJob(config, options.name);
         job.onUpdate = options.onUpdate;
