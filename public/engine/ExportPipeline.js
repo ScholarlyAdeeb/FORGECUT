@@ -279,6 +279,20 @@
         const ME = window.ForgeCut && window.ForgeCut.MediaEngine;
         if (!ME) return;
         const waits = [];
+        // Outgoing side of transitions: same rule as playback sync.
+        const TE = window.ForgeCut && window.ForgeCut.TransitionEngine;
+        const partnerLocal = new Map();
+        const claimed = new Set();
+        if (TE && TE.partners) {
+            const visual = (appState.tracks || []).filter(t => t.type === 'video' || t.type === 'image');
+            TE.partners(visual, time).forEach(p => partnerLocal.set(p.clip.id, p.localTime));
+            if (partnerLocal.size) (appState.tracks || []).forEach(t => (t.clips || []).forEach(c => {
+                if (time >= c.startTime && time < c.startTime + c.duration) {
+                    const a = ME.getAsset(c.assetId);
+                    if (a && a.element) claimed.add(a.element);
+                }
+            }));
+        }
 
         (appState.tracks || []).forEach(track => {
             (track.clips || []).forEach(clip => {
@@ -287,8 +301,9 @@
                 const el = asset.element;
                 if (!el.duration || !isFinite(el.duration)) return;
 
-                const inRange = time >= clip.startTime && time < clip.startTime + clip.duration;
-                if (!inRange) return;
+                const onScreen = time >= clip.startTime && time < clip.startTime + clip.duration;
+                const asPartner = !onScreen && partnerLocal.has(clip.id) && !claimed.has(el);
+                if (!onScreen && !asPartner) return;
 
                 // Speed is applied during playback as element.playbackRate, which
                 // an offline seek never sees. Without folding it into the source
@@ -300,8 +315,9 @@
                     ? clip.playbackSpeed : 1;
 
                 // Clamp: seeking past the end never fires 'seeked'.
-                let target = TM ? TM.sourceTime(clip, time - clip.startTime)
-                    : (time - clip.startTime) * speed + (clip.trimStart || 0);
+                const local = asPartner ? partnerLocal.get(clip.id) : time - clip.startTime;
+                let target = TM ? TM.sourceTime(clip, local)
+                    : local * speed + (clip.trimStart || 0);
                 // +0.1 ms: a computed time can land a hair BEFORE a frame
                 // boundary (0.49999998 for 0.5), and the element then rightly
                 // shows the previous frame. Measured as exact one-frame jumps

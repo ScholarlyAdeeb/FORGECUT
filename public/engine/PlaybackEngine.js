@@ -212,6 +212,26 @@
 
         let realtimeBeepActive = false;
 
+        // Clips on the outgoing side of a transition stay live past their end
+        // (see TransitionEngine.partners). An element already used by a clip
+        // that is genuinely on screen keeps that job — for the two halves of
+        // a split clip that frame IS the continuation.
+        const TE = window.ForgeCut && window.ForgeCut.TransitionEngine;
+        const partnerLocal = new Map();
+        if (TE && TE.partners) {
+            const visual = _state.tracks.filter(t => t.type === 'video' || t.type === 'image');
+            TE.partners(visual, _state.currentTime).forEach(p => partnerLocal.set(p.clip.id, p.localTime));
+        }
+        const claimed = new Set();
+        if (partnerLocal.size) {
+            _state.tracks.forEach(t => t.clips.forEach(c => {
+                if (_state.currentTime >= c.startTime && _state.currentTime < c.startTime + c.duration) {
+                    const a = ME ? ME.getAsset(c.assetId) : null;
+                    if (a && a.element) claimed.add(a.element);
+                }
+            }));
+        }
+
         _state.tracks.forEach(track => {
             track.clips.forEach(clip => {
                 const asset = ME ? ME.getAsset(clip.assetId) : (window.assetCache ? window.assetCache.get(clip.assetId) : null);
@@ -219,7 +239,9 @@
                 if (asset.element.tagName !== 'VIDEO' && asset.element.tagName !== 'AUDIO') return;
 
                 const clipEnd = clip.startTime + clip.duration;
-                const inRange = _state.currentTime >= clip.startTime && _state.currentTime < clipEnd;
+                const onScreen = _state.currentTime >= clip.startTime && _state.currentTime < clipEnd;
+                const asPartner = !onScreen && partnerLocal.has(clip.id) && !claimed.has(asset.element);
+                const inRange = onScreen || asPartner;
                 // With proxies on, the proxy is what is drawn, so it is what
                 // must play and seek; the original stays paused.
                 const element = (ME && ME.getRenderElement) ? ME.getRenderElement(asset) : asset.element;
@@ -234,8 +256,10 @@
                     // "drifted" every frame and scrubbing showed a different
                     // frame from the export.)
                     const TM = window.ForgeCut && window.ForgeCut.TimeMap;
-                    const clipLocal = _state.currentTime - clip.startTime;
-                    const localTime = TM ? TM.sourceTime(clip, clipLocal) : clipLocal + (clip.trimStart || 0);
+                    const clipLocal = asPartner ? partnerLocal.get(clip.id) : _state.currentTime - clip.startTime;
+                    let localTime = TM ? TM.sourceTime(clip, clipLocal) : clipLocal + (clip.trimStart || 0);
+                    // Past the end of the media there is nothing to run into: hold the last frame.
+                    if (asPartner && element.duration) localTime = Math.min(localTime, element.duration - 0.05);
                     const speed = TM ? TM.speedAt(clip, clipLocal) : (clip.playbackSpeed !== undefined ? clip.playbackSpeed : 1.0);
                     // Proxies (WebM, millisecond timestamps) are seeked to the
                     // middle of the frame; see ProxyEngine.attach.

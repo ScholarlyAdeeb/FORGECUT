@@ -250,7 +250,56 @@
         };
     }
 
-    function getTransitionProgress(clip, currentTime) {
+    const ADJACENT = 0.05;      // seconds: clips this close are treated as one cut
+
+    /** The clip that ends where `clip` starts on the same track (the outgoing side of its cut). */
+    function findIncoming(track, clip) {
+        if (!track) return null;
+        let best = null;
+        for (const c of track.clips) {
+            if (c === clip || c.startTime >= clip.startTime) continue;
+            if (Math.abs(c.startTime + c.duration - clip.startTime) <= ADJACENT &&
+                (!best || c.startTime > best.startTime)) best = c;
+        }
+        return best;
+    }
+
+    /** The clip that starts where `clip` ends on the same track. */
+    function findOutgoing(track, clip) {
+        if (!track) return null;
+        return track.clips.find(c => c !== clip && Math.abs(c.startTime - (clip.startTime + clip.duration)) <= ADJACENT) || null;
+    }
+
+    /**
+     * Clips that must stay visible past their own end because the next clip
+     * on their track is transitioning in from them. → [{ clip, track, localTime }]
+     * (localTime is clip-local and > clip.duration: the outgoing clip keeps
+     * running into its media handle, or holds its last frame if there is none).
+     *
+     * Renderer, playback sync and export seeking all call this, so the three
+     * agree on what the outgoing side of a transition shows.
+     */
+    function partners(tracks, time) {
+        const out = [];
+        (tracks || []).forEach(track => {
+            (track.clips || []).forEach(b => {
+                const p = getTransitionProgress(b, time, track);
+                if (!p.active || !p.isEntry) return;
+                const a = findIncoming(track, b);
+                if (a) out.push({ clip: a, track, localTime: time - a.startTime, for: b.id });
+            });
+        });
+        return out;
+    }
+
+    /**
+     * Entry: the first `duration` seconds of a clip with a transition.
+     * Exit: the last `duration` seconds — but only when no clip follows on
+     * the same track; a following clip owns that cut with its own entry.
+     * (Previously every transition also played at the clip's end, into an
+     * empty canvas, even with another clip right after it.)
+     */
+    function getTransitionProgress(clip, currentTime, track) {
         const trans = getClipTransition(clip);
         if (!trans) return { active: false, progress: 0, isEntry: false };
 
@@ -269,7 +318,7 @@
             };
         }
 
-        if (remaining < trans.duration && remaining >= 0) {
+        if (remaining < trans.duration && remaining >= 0 && !(track && findOutgoing(track, clip))) {
             return {
                 active: true,
                 progress: 1 - (remaining / trans.duration),
@@ -287,6 +336,9 @@
         applyTransition,
         getClipTransition,
         getTransitionProgress,
+        findIncoming,
+        findOutgoing,
+        partners,
         easeInOutCubic
     };
 })();

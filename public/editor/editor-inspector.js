@@ -22,6 +22,15 @@ function updateInspector() {
     if (transitionDurationInput) {
         transitionDurationInput.value = (clip.transitionDuration !== undefined ? clip.transitionDuration : 1.5).toFixed(2);
     }
+    // Highlight the gallery card for THIS clip's transition. The highlight
+    // was hard-coded on Fade in the markup and never moved, so picking
+    // another transition looked as if nothing had happened.
+    const currentTransition = clip.transition || 'None';
+    document.querySelectorAll('[onclick^="setTransition("]').forEach(card => {
+        const m = (card.getAttribute('onclick') || '').match(/^setTransition\('([^']+)'\)/);
+        card.classList.toggle('transition-card-active', !!m && m[1] === currentTransition);
+        card.setAttribute('aria-pressed', String(!!m && m[1] === currentTransition));
+    });
     const transitionSoundSelect = document.getElementById('transitionSoundSelect');
     if (transitionSoundSelect) {
         transitionSoundSelect.value = clip.transitionSound || 'none';

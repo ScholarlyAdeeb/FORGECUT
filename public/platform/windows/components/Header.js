@@ -449,7 +449,7 @@ class ForgeCutHeader extends HTMLElement {
                         <div class="flex items-center gap-2">
                             <span class="text-[10px] w-12 text-on-surface-variant">Duration:</span>
                             <div class="flex items-center bg-white border border-outline-variant rounded px-1 h-5 w-20">
-                                <input class="w-full text-[10px] focus:outline-none border-none p-0 bg-transparent text-on-surface" type="text" id="transitionDurationInput" value="01.50" oninput="updateTransitionDuration(this.value)">
+                                <input class="w-full h-full leading-none text-[10px] focus:outline-none border-none p-0 bg-transparent text-on-surface" type="text" id="transitionDurationInput" value="1.50" oninput="updateTransitionDuration(this.value)">
                             </div>
                         </div>
                         <div class="flex items-center gap-2">
@@ -541,11 +541,11 @@ class ForgeCutHeader extends HTMLElement {
                     </button>
                     <div class="flex flex-col justify-center gap-1">
                         <div class="flex items-center gap-2 px-1.5 py-0.5 bg-surface-container rounded border border-outline-variant/30">
-                            <span class="text-[9px] uppercase text-outline">Delay:</span>
+                            <span class="text-[9px] uppercase text-outline w-8">Delay:</span>
                             <input class="bg-transparent border-none p-0 w-10 text-right text-[10px] focus:ring-0 text-on-surface" type="text" id="animationDelayInput" value="0.00s" onchange="updateAnimationParameters()">
                         </div>
                         <div class="flex items-center gap-2 px-1.5 py-0.5 bg-surface-container rounded border border-outline-variant/30">
-                            <span class="text-[9px] uppercase text-outline">Dur:</span>
+                            <span class="text-[9px] uppercase text-outline w-8">Dur:</span>
                             <input class="bg-transparent border-none p-0 w-10 text-right text-[10px] focus:ring-0 text-on-surface" type="text" id="animationDurationInput" value="0.50s" onchange="updateAnimationParameters()">
                         </div>
                     </div>

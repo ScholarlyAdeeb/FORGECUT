@@ -6,6 +6,58 @@
  * in index.html; the concatenation is byte-identical to the original file.
  */
 // Render active clips onto the canvas
+/**
+ * Draw a clip that has just ended onto `target`, as the "from" picture of
+ * the next clip's transition. Uses the clip's state at its final moment
+ * (keyframes, effects, crop, blend) and whatever frame its media element
+ * holds; playback sync and export seeking keep that element on the clip's
+ * continued time (TransitionEngine.partners).
+ */
+function drawOutgoingClip(target, a) {
+    const FC = window.ForgeCut || {};
+    const ME = FC.MediaEngine;
+    const asset = ME ? ME.getAsset(a.assetId) : assetCache.get(a.assetId);
+    if (!asset || !asset.element) return;
+    const el = asset.element;
+    const drawEl = ME && ME.getRenderElement ? ME.getRenderElement(asset) : el;
+    if (drawEl.tagName === 'VIDEO' && !(drawEl.readyState >= 2 || drawEl.__fcHasFrame)) return;
+    const kf = a.keyframes && !Array.isArray(a.keyframes) ? a.keyframes : {};
+    const TM = FC.TimeMap;
+    const tEnd = a.duration;
+    const val = (prop, d) => {
+        const base = a[prop] !== undefined ? a[prop] : d;
+        return TM ? TM.interpolate(kf[prop], tEnd, base) : base;
+    };
+    const width = el.videoWidth || el.naturalWidth || el.width || 320;
+    const height = el.videoHeight || el.naturalHeight || el.height || 180;
+    const k = drawEl !== el && el.videoWidth ? (drawEl.videoWidth || 1) / el.videoWidth : 1;
+
+    let src = drawEl;
+    if (a.effects && a.effects.length && FC.Effects && FC.Compositor) {
+        const stack = FC.Effects.resolveStack(a.effects, (key, base) => (TM ? TM.interpolate(kf[key], tEnd, base) : base), window.fxResources);
+        if (k !== 1) stack.forEach(fx => { if (fx.type === 'blur') fx.params.radius *= k; });
+        if (stack.length) src = FC.Compositor.process(drawEl, stack);
+    }
+
+    target.save();
+    target.globalAlpha = val('opacity', 1);
+    target.globalCompositeOperation = (FC.Effects && FC.Effects.BLEND_MODES[a.blendMode]) || 'source-over';
+    target.translate(val('x', canvas.width / 2), val('y', canvas.height / 2));
+    target.rotate(val('rotation', 0) * Math.PI / 180);
+    const sc = val('scale', 1);
+    target.scale(sc, sc);
+    target.filter = `blur(${val('blur', 0)}px) brightness(${val('brightness', 1)}) contrast(${val('contrast', 1)}) saturate(${val('saturation', 1)}) hue-rotate(${val('hue', 0)}deg)`;
+    try {
+        if (a.cropX !== undefined && a.cropY !== undefined && a.cropW !== undefined && a.cropH !== undefined) {
+            const cw = val('cropW', width), ch = val('cropH', height);
+            target.drawImage(src, val('cropX', 0) * k, val('cropY', 0) * k, cw * k, ch * k, -cw / 2, -ch / 2, cw, ch);
+        } else {
+            target.drawImage(src, -width / 2, -height / 2, width, height);
+        }
+    } catch (e) { /* media not ready */ }
+    target.restore();
+}
+
 function renderCanvasComposition() {
     if (!canvas || !ctx) return;
 
@@ -86,7 +138,7 @@ function renderCanvasComposition() {
             // Handle transition blending if TransitionEngine is loaded
             let transProgress = { active: false };
             if (window.ForgeCut && window.ForgeCut.TransitionEngine) {
-                transProgress = window.ForgeCut.TransitionEngine.getTransitionProgress(clip, state.currentTime);
+                transProgress = window.ForgeCut.TransitionEngine.getTransitionProgress(clip, state.currentTime, track);
             }
 
             if (track.type === 'video' || track.type === 'image') {
@@ -152,6 +204,14 @@ function renderCanvasComposition() {
                             const fromCtx = window._offscreenCanvasFrom.getContext('2d');
                             fromCtx.clearRect(0, 0, canvas.width, canvas.height);
                             fromCtx.drawImage(canvas, 0, 0);
+                            // The outgoing side of the cut: the clip that ends
+                            // where this one starts keeps showing (running on
+                            // into its media, or held on its last frame), so a
+                            // transition goes A -> B instead of empty -> B.
+                            if (transProgress.isEntry) {
+                                const outgoing = window.ForgeCut.TransitionEngine.findIncoming(track, clip);
+                                if (outgoing) drawOutgoingClip(fromCtx, outgoing);
+                            }
 
                             const toCtx = window._offscreenCanvasTo.getContext('2d');
                             toCtx.clearRect(0, 0, canvas.width, canvas.height);
