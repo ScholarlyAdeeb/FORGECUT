@@ -594,6 +594,10 @@ class ForgeCutHeader extends HTMLElement {
                         <input type="checkbox" id="chkMagneticSnapping" checked onchange="toggleMagneticSnapping(this.checked)" class="rounded border-outline-variant text-primary focus:ring-primary h-3.5 w-3.5">
                         <span class="text-on-surface">Snapping</span>
                     </label>
+                    <label class="flex items-center gap-1.5 cursor-pointer text-xs" title="Waveform, vectorscope and histogram of the current frame">
+                        <input type="checkbox" id="chkShowScopes" onchange="toggleScopes(this.checked)" class="rounded border-outline-variant text-primary focus:ring-primary h-3.5 w-3.5">
+                        <span class="text-on-surface">Scopes</span>
+                    </label>
                 </div>
                 <span class="font-ribbon-group-label text-ribbon-group-label text-on-surface-variant/60 uppercase tracking-wider py-0.5">Show / Hide</span>
             </div>

@@ -97,6 +97,127 @@ void main() {
     acc /= wsum;
     o = acc.a > 0.0 ? vec4(acc.rgb / acc.a, acc.a) : vec4(0.0);
 }`,
+        grade: `#version 300 es
+precision highp float;
+in vec2 v_uv; out vec4 o;
+uniform sampler2D u_src;
+uniform float u_exposure, u_temp, u_tint, u_lift, u_gamma, u_gain, u_vib;
+void main() {
+    vec4 t = texture(u_src, v_uv);
+    vec3 c = t.rgb * exp2(u_exposure);
+    c.r *= 1.0 + 0.25 * u_temp; c.b *= 1.0 - 0.25 * u_temp; c.g *= 1.0 - 0.25 * u_tint;
+    c = clamp(c, 0.0, 1.0);
+    c = clamp(u_gain * (c + u_lift * (1.0 - c)), 0.0, 1.0);
+    c = pow(max(c, vec3(1e-9)), vec3(1.0 / u_gamma));
+    if (u_vib != 0.0) {
+        float mx = max(c.r, max(c.g, c.b)), mn = min(c.r, min(c.g, c.b));
+        float k = 1.0 + u_vib * (1.0 - (mx - mn));
+        float y = dot(c, vec3(0.2126, 0.7152, 0.0722));
+        c = y + (c - y) * k;
+    }
+    o = vec4(clamp(c, 0.0, 1.0), t.a);
+}`,
+        selective: `#version 300 es
+precision highp float;
+in vec2 v_uv; out vec4 o;
+uniform sampler2D u_src;
+uniform float u_hue, u_range, u_soft, u_shift, u_sat, u_light;
+vec3 rgb2hsv(vec3 c) {
+    float mx = max(c.r, max(c.g, c.b)), mn = min(c.r, min(c.g, c.b)), d = mx - mn, h = 0.0;
+    if (d > 1e-6) {
+        if (mx == c.r) h = mod((c.g - c.b) / d, 6.0);
+        else if (mx == c.g) h = (c.b - c.r) / d + 2.0;
+        else h = (c.r - c.g) / d + 4.0;
+        h *= 60.0; if (h < 0.0) h += 360.0;
+    }
+    return vec3(h, mx > 0.0 ? d / mx : 0.0, mx);
+}
+vec3 hsv2rgb(vec3 v) {
+    float h = mod(mod(v.x, 360.0) + 360.0, 360.0);
+    float c = v.z * v.y, x = c * (1.0 - abs(mod(h / 60.0, 2.0) - 1.0)), m = v.z - c;
+    int k = int(floor(h / 60.0)) % 6;
+    vec3 t = k == 0 ? vec3(c, x, 0) : k == 1 ? vec3(x, c, 0) : k == 2 ? vec3(0, c, x)
+           : k == 3 ? vec3(0, x, c) : k == 4 ? vec3(x, 0, c) : vec3(c, 0, x);
+    return t + m;
+}
+void main() {
+    vec4 t = texture(u_src, v_uv);
+    vec3 hsv = rgb2hsv(t.rgb);
+    float d = mod(abs(hsv.x - u_hue), 360.0); if (d > 180.0) d = 360.0 - d;
+    float w = (1.0 - smoothstep(u_range, u_range + u_soft + 1e-6, d)) * smoothstep(0.05, 0.2, hsv.y);
+    vec3 rgb = t.rgb;
+    if (w > 0.0) {
+        rgb = hsv2rgb(vec3(hsv.x + u_shift * w,
+                           clamp(hsv.y * (1.0 + (u_sat - 1.0) * w), 0.0, 1.0),
+                           clamp(hsv.z + u_light * w, 0.0, 1.0)));
+    }
+    o = vec4(clamp(rgb, 0.0, 1.0), t.a);
+}`,
+        lut: `#version 300 es
+precision highp float;
+precision highp sampler3D;
+in vec2 v_uv; out vec4 o;
+uniform sampler2D u_src;
+uniform sampler3D u_lut;
+uniform float u_n, u_intensity;
+void main() {
+    vec4 t = texture(u_src, v_uv);
+    vec3 coord = clamp(t.rgb, 0.0, 1.0) * ((u_n - 1.0) / u_n) + 0.5 / u_n;
+    vec3 l = texture(u_lut, coord).rgb;
+    o = vec4(clamp(mix(t.rgb, l, u_intensity), 0.0, 1.0), t.a);
+}`,
+        chroma: `#version 300 es
+precision highp float;
+in vec2 v_uv; out vec4 o;
+uniform sampler2D u_src;
+uniform vec2 u_key;
+uniform float u_sim, u_smooth, u_spill;
+const vec3 LUMA = vec3(0.2126, 0.7152, 0.0722);
+void main() {
+    vec4 t = texture(u_src, v_uv);
+    float y = dot(t.rgb, LUMA);
+    vec2 q = vec2((t.b - y) / 1.8556, (t.r - y) / 1.5748);
+    float base = distance(q, u_key) - u_sim * 0.4;
+    float a = pow(clamp(base / (u_smooth * 0.4), 0.0, 1.0), 1.5);
+    float sp = pow(clamp(base / (u_spill * 0.4), 0.0, 1.0), 1.5);
+    float yc = clamp(y, 0.0, 1.0);
+    o = vec4(clamp(yc + (t.rgb - yc) * sp, 0.0, 1.0), t.a * a);
+}`,
+        mask: `#version 300 es
+precision highp float;
+in vec2 v_uv; out vec4 o;
+uniform sampler2D u_src;
+uniform vec2 u_size, u_center, u_half;
+uniform float u_rot, u_feather;
+uniform int u_shape, u_invert;
+void main() {
+    vec4 t = texture(u_src, v_uv);
+    vec2 d0 = v_uv * u_size - u_center;
+    float a = -u_rot, ca = cos(a), sa = sin(a);
+    vec2 p = vec2(d0.x * ca - d0.y * sa, d0.x * sa + d0.y * ca);
+    float d;
+    if (u_shape == 1) {
+        vec2 q = abs(p) - u_half;
+        d = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0);
+    } else {
+        d = (length(p / u_half) - 1.0) * min(u_half.x, u_half.y);
+    }
+    float cov = 1.0 - smoothstep(-u_feather * 0.5, u_feather * 0.5, d);
+    if (u_invert == 1) cov = 1.0 - cov;
+    o = vec4(t.rgb, t.a * cov);
+}`,
+        segment: `#version 300 es
+precision highp float;
+in vec2 v_uv; out vec4 o;
+uniform sampler2D u_src;
+uniform sampler2D u_mask;
+uniform float u_thr, u_feather;
+void main() {
+    vec4 t = texture(u_src, v_uv);
+    float conf = texture(u_mask, v_uv).r;
+    float a = smoothstep(u_thr - u_feather * 0.5, u_thr + u_feather * 0.5 + 1e-6, conf);
+    o = vec4(t.rgb, t.a * a);
+}`,
         present: `#version 300 es
 precision highp float;
 in vec2 v_uv; out vec4 o;
@@ -187,6 +308,62 @@ void main() {
     /** Drop all GL state; the next process() rebuilds it. */
     function reset() {
         gl = null; programs = {}; quad = null; fbos = []; srcTex = null; size = { w: 0, h: 0 };
+        lutTextures = new WeakMap(); maskTex = null;
+    }
+
+    // One 3D texture per LUT table (keyed by the decoded table object).
+    let lutTextures = new WeakMap();
+    function lutTexture(lut) {
+        let t = lutTextures.get(lut);
+        if (t) return t;
+        t = gl.createTexture();
+        gl.bindTexture(gl.TEXTURE_3D, t);
+        gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_R, gl.CLAMP_TO_EDGE);
+        gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+        // RGB16F is linearly filterable in WebGL2 without extensions.
+        gl.texImage3D(gl.TEXTURE_3D, 0, gl.RGB16F, lut.size, lut.size, lut.size, 0, gl.RGB, gl.FLOAT, lut.data);
+        gl.pixelStorei(gl.UNPACK_ALIGNMENT, 4);
+        lutTextures.set(lut, t);
+        return t;
+    }
+
+    let maskTex = null;
+    function uploadMask(m) {
+        if (!maskTex) {
+            maskTex = gl.createTexture();
+            gl.bindTexture(gl.TEXTURE_2D, maskTex);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        }
+        gl.bindTexture(gl.TEXTURE_2D, maskTex);
+        gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.R16F, m.width, m.height, 0, gl.RED, gl.FLOAT, m.data);
+        gl.pixelStorei(gl.UNPACK_ALIGNMENT, 4);
+        return maskTex;
+    }
+
+    /* ── segmentation provider (background removal) ───────────────────
+       The model lives in the editor layer (it is fetched from a CDN). It
+       registers a synchronous provider here plus an async loader, so the
+       compositor stays synchronous and export can await readiness first. */
+    let segmenter = null;          // (source) => { width, height, data: Float32Array } | null
+    let segmenterLoader = null;    // () => Promise
+    function setSegmenter(provider, loader) { segmenter = provider || null; segmenterLoader = loader || null; }
+
+    /**
+     * Make sure every resource a set of effect stacks needs is loaded. Export
+     * awaits this before its first frame, so nothing renders half-prepared.
+     */
+    async function prepare(effectLists) {
+        const needsSeg = (effectLists || []).some(list => (list || []).some(e => e && e.enabled && e.type === 'backgroundRemoval'));
+        if (needsSeg && !segmenter && segmenterLoader) await segmenterLoader();
+        return { segmentation: !needsSeg || !!segmenter };
     }
 
     function ensureSize(w, h) {
@@ -212,6 +389,7 @@ void main() {
         gl.uniform1i(prog.uni.u_src, 0);
         gl.uniform1i(prog.uni.u_flip, flip ? 1 : 0);
         if (setUniforms) setUniforms(prog.uni);
+        gl.activeTexture(gl.TEXTURE0);
         gl.bindBuffer(gl.ARRAY_BUFFER, quad);
         gl.enableVertexAttribArray(0);
         gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
@@ -243,6 +421,55 @@ void main() {
                     gl.uniform2f(u.u_size, w, h);
                     gl.uniform1f(u.u_amount, p.amount); gl.uniform1f(u.u_radius, p.radius); gl.uniform1f(u.u_softness, p.softness);
                 }]];
+            case 'grade':
+                return [['grade', u => {
+                    gl.uniform1f(u.u_exposure, p.exposure); gl.uniform1f(u.u_temp, p.temperature); gl.uniform1f(u.u_tint, p.tint);
+                    gl.uniform1f(u.u_lift, p.lift); gl.uniform1f(u.u_gamma, p.gamma); gl.uniform1f(u.u_gain, p.gain);
+                    gl.uniform1f(u.u_vib, p.vibrance);
+                }]];
+            case 'selectiveColor':
+                return [['selective', u => {
+                    gl.uniform1f(u.u_hue, p.hue); gl.uniform1f(u.u_range, p.range); gl.uniform1f(u.u_soft, p.softness);
+                    gl.uniform1f(u.u_shift, p.hueShift); gl.uniform1f(u.u_sat, p.saturation); gl.uniform1f(u.u_light, p.lightness);
+                }]];
+            case 'lut': {
+                if (!fx.lutData) return [];
+                const tex = lutTexture(fx.lutData);
+                return [['lut', u => {
+                    gl.activeTexture(gl.TEXTURE1);
+                    gl.bindTexture(gl.TEXTURE_3D, tex);
+                    gl.uniform1i(u.u_lut, 1);
+                    gl.uniform1f(u.u_n, fx.lutData.size);
+                    gl.uniform1f(u.u_intensity, p.intensity);
+                }]];
+            }
+            case 'chromaKey': {
+                const k = E.hexToRgb(p.key), kc = E.cbcr(k[0], k[1], k[2]);
+                return [['chroma', u => {
+                    gl.uniform2f(u.u_key, kc[0], kc[1]);
+                    gl.uniform1f(u.u_sim, p.similarity); gl.uniform1f(u.u_smooth, p.smoothness); gl.uniform1f(u.u_spill, p.spill);
+                }]];
+            }
+            case 'mask':
+                return [['mask', u => {
+                    gl.uniform2f(u.u_size, w, h);
+                    gl.uniform2f(u.u_center, p.centerX * w, p.centerY * h);
+                    gl.uniform2f(u.u_half, Math.max(0.5, p.width * w / 2), Math.max(0.5, p.height * h / 2));
+                    gl.uniform1f(u.u_rot, p.rotation * Math.PI / 180);
+                    gl.uniform1f(u.u_feather, Math.max(0.5, p.feather * Math.min(w, h)));
+                    gl.uniform1i(u.u_shape, p.shape === 'rectangle' ? 1 : 0);
+                    gl.uniform1i(u.u_invert, p.invert === 'yes' ? 1 : 0);
+                }]];
+            case 'backgroundRemoval': {
+                if (!fx.maskData) return [];
+                const tex = uploadMask(fx.maskData);
+                return [['segment', u => {
+                    gl.activeTexture(gl.TEXTURE1);
+                    gl.bindTexture(gl.TEXTURE_2D, tex);
+                    gl.uniform1i(u.u_mask, 1);
+                    gl.uniform1f(u.u_thr, p.threshold); gl.uniform1f(u.u_feather, p.feather);
+                }]];
+            }
             case 'blur': {
                 const sigma = Math.max(0.01, p.radius), half = Math.min(192, Math.ceil(sigma * 3));
                 const dir = (dx, dy) => u => {
@@ -305,6 +532,14 @@ void main() {
         if (!source || !stack || stack.length === 0 || !FX()) return source;
         const { w, h } = sourceSize(source);
         if (!(w > 0 && h > 0)) return source;
+        for (const fx of stack) {
+            if (fx.type !== 'backgroundRemoval') continue;
+            // The mask is of the frame AS IT ARRIVES at this effect; effects
+            // above it are colour-only in practice, and segmenting the raw
+            // frame keeps the model's input stable while grading is tweaked.
+            if (!segmenter) { if (segmenterLoader) segmenterLoader().catch(() => {}); fx.maskData = null; continue; }
+            try { fx.maskData = segmenter(source); } catch (e) { fx.maskData = null; }
+        }
         const t0 = (typeof performance !== 'undefined') ? performance.now() : 0;
         let out;
         let forceCPU = opts && opts.cpu;
@@ -359,8 +594,30 @@ void main() {
         { type: 'sepia', params: { amount: 1 } },
         { type: 'invert', params: { amount: 0.35 } },
         { type: 'vignette', params: { amount: 0.8, radius: 0.7, softness: 0.5 } },
-        { type: 'blur', params: { radius: 3 } }
+        { type: 'blur', params: { radius: 3 } },
+        { type: 'grade', params: { exposure: 0.4, temperature: 0.5, tint: -0.3, lift: 0.08, gamma: 1.3, gain: 0.9, vibrance: 0.5 } },
+        { type: 'selectiveColor', params: { hue: 120, range: 40, softness: 25, hueShift: 60, saturation: 1.4, lightness: -0.1 } },
+        { type: 'chromaKey', params: { key: '#00b140', similarity: 0.4, smoothness: 0.08, spill: 0.1 } },
+        { type: 'mask', params: { shape: 'ellipse', centerX: 0.45, centerY: 0.55, width: 0.6, height: 0.4, rotation: 25, feather: 0.1, invert: 'no' } },
+        { type: 'mask', params: { shape: 'rectangle', centerX: 0.5, centerY: 0.5, width: 0.5, height: 0.7, rotation: -10, feather: 0.05, invert: 'yes' } },
+        { type: 'lut', params: { lut: 'selftest', intensity: 0.8 } }
     ];
+
+    // A deliberately non-linear 17³ look so trilinear sampling is exercised.
+    let testLut = null;
+    function selfTestLut() {
+        if (testLut) return testLut;
+        const n = 17, d = new Float32Array(n * n * n * 3);
+        let i = 0;
+        for (let b = 0; b < n; b++) for (let g = 0; g < n; g++) for (let r = 0; r < n; r++) {
+            const R = r / (n - 1), G = g / (n - 1), B = b / (n - 1);
+            d[i++] = Math.min(1, Math.pow(R, 0.8) * 1.05);
+            d[i++] = G * G * 0.3 + G * 0.7;
+            d[i++] = Math.min(1, 0.1 + B * 0.8 + R * 0.05);
+        }
+        testLut = { size: n, data: d };
+        return testLut;
+    }
 
     /** Deterministic RGB test card: hue sweep × value ramp, plus grey steps. */
     function testPattern(n) {
@@ -381,16 +638,24 @@ void main() {
         return img;
     }
 
+    /**
+     * Per-channel difference. Alpha is always compared. Colour is compared
+     * only where the pixel is (nearly) opaque in both: a canvas stores
+     * premultiplied colour, so the RGB of a mostly transparent pixel is
+     * quantised away and is not a meaningful thing to compare.
+     */
     function compare(a, b) {
         let max = 0, sum = 0, n = 0;
         for (let i = 0; i < a.length; i += 4) {
-            for (let c = 0; c < 3; c++) {
+            const opaque = a[i + 3] >= 250 && b[i + 3] >= 250;
+            for (let c = 0; c < 4; c++) {
+                if (c < 3 && !opaque) continue;
                 const d = Math.abs(a[i + c] - b[i + c]);
                 if (d > max) max = d;
                 sum += d; n++;
             }
         }
-        return { max, mean: Math.round(sum / n * 1000) / 1000 };
+        return { max, mean: n ? Math.round(sum / n * 1000) / 1000 : 0 };
     }
 
     const cpuOnly = {};
@@ -421,6 +686,7 @@ void main() {
 
         for (const c of CASES) {
             const stack = [{ id: 'selftest', type: c.type, params: c.params }];
+            if (c.type === 'lut') stack[0].lutData = selfTestLut();
             const gpu = grab(processGPU(card, stack, n, n));
             const ref = FX().applyReference(pattern.slice(), n, n, stack);
             const r = Object.assign({ type: c.type, params: c.params, against: 'reference' }, compare(gpu, ref));
@@ -459,5 +725,9 @@ void main() {
     }
 
     window.ForgeCut = window.ForgeCut || {};
-    window.ForgeCut.Compositor = { process, info, selfTest, TOLERANCE, _reset: () => { reset(); broken = false; gateRun = false; } };
+    window.ForgeCut.Compositor = {
+        process, info, selfTest, prepare, setSegmenter, TOLERANCE,
+        get segmenterReady() { return !!segmenter; },
+        _reset: () => { reset(); broken = false; gateRun = false; }
+    };
 })();

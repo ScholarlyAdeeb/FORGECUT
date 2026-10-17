@@ -60,6 +60,8 @@ platform reaches into another. Run it before committing UI work.
 | `Effects.js` | none | pure: effect stack model, params, CPU reference |
 | `Compositor.js` | OffscreenCanvas / WebGL2 | runs effect stacks on the GPU, see below |
 | `SmartEdit.js`, `Captions.js`, `Reframe.js` | none | pure: silence, scenes, captions, reframe maths |
+| `Luts.js` | none | pure: .cube parsing, 1D→3D, domain resampling, project packing |
+| `Scopes.js` | none | pure: histogram, waveform, vectorscope maths |
 
 None of these reference a platform's DOM. `PlaybackEngine` used to write
 directly into the Ribbon's transport icons; it now emits:
@@ -101,6 +103,26 @@ A video or image clip may carry `clip.effects`, an ordered stack:
   once per device on first use, and any effect type that fails is routed to
   the CPU on that device. Without WebGL2 the whole stack runs on the CPU:
   slower, same result.
+- **Effect set:** Adjust, Black & White, Sepia, Invert, Vignette, Blur,
+  Color Grade (exposure, white balance, lift/gamma/gain, vibrance), Selective
+  Color (HSL qualifier), LUT, Chroma Key (BT.709 CbCr distance + spill
+  suppression), Mask (feathered rectangle/ellipse, keyframeable geometry) and
+  Remove Background. Every one of them is in the self-test except Remove
+  Background, which needs a model and is checked with a synthetic mask.
+- **Param kinds:** `number` (keyframeable), `color`, `choice` and `lut`. Only
+  numbers animate; the rest are discrete edits with one undo step each.
+- **LUTs** are WebGL2 3D textures (RGB16F, hardware trilinear), not the tiled
+  2D fallback the plan assumed. Imported `.cube` files live in `state.luts`
+  inside the project file, packed as 16-bit values, so a project stays
+  self-contained.
+- **Remove Background** uses MediaPipe's selfie segmenter, loaded in
+  `editor-ai.js` and registered with `Compositor.setSegmenter(provider,
+  loader)`. Export calls `Compositor.prepare()` before frame 1 and refuses to
+  start if the model cannot load, so a frame is never exported without it.
+- **Blend modes** are per clip (`clip.blendMode`) and use the 2D canvas's
+  native `globalCompositeOperation`, so they work for every clip type,
+  including text and shapes.
+- **Scopes** sample a 192 px copy of the frame at 5 Hz, only while visible.
 - **Adding an effect** = an entry in `Effects.EFFECTS`, a reference function,
   a shader pass in `Compositor.js`, and a self-test case. Both inspectors build
   their controls from the param schema, so no UI work is needed per effect.

@@ -33,6 +33,7 @@ class ForgeCutPreview extends HTMLElement {
     
     <!-- Canvas Composition Work Area -->
     <div class="flex-1 flex items-center justify-center relative overflow-hidden bg-slate-900" id="canvasContainerBg">
+        <div id="scopesPanel" class="absolute bottom-3 right-3 z-30 w-72 hidden flex-col gap-1.5 p-2 rounded border border-outline-variant/40 bg-surface-container shadow-lg" aria-label="Scopes"></div>
         <div id="canvasWrapper" class="relative shrink-0 shadow-2xl transition-all duration-75" style="width: 800px; height: 450px;">
             <!-- Gridlines / Guides / Safe Area overlays -->
             <div class="absolute inset-0 pointer-events-none hidden z-10" id="canvasGridOverlay"></div>
@@ -96,3 +97,23 @@ class ForgeCutPreview extends HTMLElement {
 }
 
 customElements.define('forgecut-preview', ForgeCutPreview);
+
+// Scopes panel over the preview (View > Show / Hide > Scopes). The drawing is
+// shared (editor/editor-scopes.js); the panel and its styling are Windows'.
+let _fcScopes = null;
+window.toggleScopes = function (show) {
+    const host = document.getElementById('scopesPanel');
+    if (!host || !window.ForgeCut || !window.ForgeCut.ScopesView) return;
+    if (!_fcScopes) {
+        _fcScopes = window.ForgeCut.ScopesView.create(host, {
+            tabClass: 'flex-1 py-0.5 rounded text-[10px] border-none cursor-pointer bg-transparent text-on-surface-variant hover:bg-surface-container-high',
+            activeClass: 'bg-primary text-on-primary',
+            canvasClass: 'rounded bg-black'
+        });
+    }
+    host.classList.toggle('hidden', !show);
+    host.classList.toggle('flex', !!show);
+    const chk = document.getElementById('chkShowScopes');
+    if (chk) chk.checked = !!show;
+    if (show) _fcScopes.start(); else _fcScopes.stop();
+};

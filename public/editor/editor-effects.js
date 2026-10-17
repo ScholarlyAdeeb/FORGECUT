@@ -131,6 +131,87 @@
         refresh(true);
     };
 
+    /* ── LUT library ───────────────────────────────────────────────────
+       Imported .cube files live in state.luts as packed records, so they are
+       saved inside the project. Decoding is cached per id; the renderer asks
+       for tables through window.fxResources. */
+    const lutCache = new Map();
+    const LUTS = () => window.ForgeCut && window.ForgeCut.Luts;
+
+    window.fxResources = {
+        lut(id) {
+            if (!id || !state.luts || !state.luts[id] || !LUTS()) return null;
+            const rec = state.luts[id];
+            const hit = lutCache.get(id);
+            if (hit && hit.rec === rec) return hit.table;
+            const table = LUTS().unpack(rec);
+            if (table) lutCache.set(id, { rec, table });
+            return table;
+        }
+    };
+
+    window.fxLutOptions = function () {
+        return Object.entries(state.luts || {}).map(([id, r]) => ({ id, name: r.name }));
+    };
+
+    /** Pick a .cube file, add it to the project, and point this LUT effect at it. */
+    window.fxImportLut = async function (clipId, fxId, file) {
+        const { clip, fx } = find(clipId, fxId);
+        if (!fx || locked(clip) || !LUTS()) return;
+        if (!file) {
+            file = await new Promise((resolve) => {
+                const inp = document.createElement('input');
+                inp.type = 'file';
+                inp.accept = '.cube';
+                inp.onchange = () => resolve(inp.files && inp.files[0]);
+                inp.click();
+            });
+            if (!file) return;
+        }
+        if (file.size > 32 * 1024 * 1024) { fcToast('That LUT file is too large (over 32 MB).'); return; }
+        let parsed;
+        try {
+            parsed = LUTS().parseCube(await file.text());
+        } catch (e) {
+            fcToast('Could not read LUT: ' + (e && e.message || e));
+            return;
+        }
+        const name = parsed.title || String(file.name).replace(/\.cube$/i, '');
+        const id = LUTS().newId();
+        // The library itself is not part of undo (a LUT nobody uses costs
+        // nothing); pointing the effect at it is.
+        state.luts = state.luts || {};
+        state.luts[id] = LUTS().pack(parsed, name);
+        withHistory('Import LUT', () => { fx.params.lut = id; });
+        refresh(true);
+        fcToast(`Imported "${name}" (${parsed.size}³).`);
+    };
+
+    /** Colour, choice and LUT params: discrete edits, one undo step each. */
+    window.fxSetValue = function (clipId, fxId, param, value) {
+        const { clip, fx } = find(clipId, fxId);
+        if (!fx || locked(clip)) return;
+        const def = FX().EFFECTS[fx.type];
+        const spec = def && def.params[param];
+        if (!spec || spec.kind === 'number') return;
+        const before = fx.params[param];
+        const next = FX().normaliseEffect({ id: fx.id, type: fx.type, params: Object.assign({}, fx.params, { [param]: value }) }).params[param];
+        if (next === before) return;
+        withHistory(`${def.label}: ${spec.label}`, () => { fx.params[param] = next; });
+        refresh(true);
+    };
+
+    /** How a clip combines with the layers below it. One undo step. */
+    window.setClipBlendMode = function (clipId, mode) {
+        const clip = findClipById(clipId);
+        if (!clip || locked(clip) || !FX() || !FX().BLEND_MODES[mode]) return;
+        if ((clip.blendMode || 'normal') === mode) return;
+        withHistory('Blend Mode', () => {
+            if (mode === 'normal') delete clip.blendMode; else clip.blendMode = mode;
+        });
+        refresh(true);
+    };
+
     window.fxHasKeyframeHere = function (clip, fx, param) {
         const list = clip.keyframes && clip.keyframes[FX().keyFor(fx, param)];
         if (!list) return false;

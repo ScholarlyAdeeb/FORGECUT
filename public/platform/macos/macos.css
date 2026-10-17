@@ -704,6 +704,26 @@ body.mac {
 .mac-range { width: 100%; accent-color: var(--mac-blue); }
 .mac-row2 { display: flex; align-items: center; gap: var(--s2); }
 
+/* Video scopes: solid panel (deliberately not a glass surface) over the
+   preview's bottom-right corner. (.mac-preview is already position: relative.) */
+.mac-scopes {
+    position: absolute; right: var(--s3); bottom: var(--s3); z-index: 5;
+    width: 280px; display: grid; gap: var(--s1); padding: var(--s2);
+    background: var(--control-bg); border: 0.5px solid var(--separator-strong);
+    border-radius: calc(var(--r-sm) + 5px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.22);
+}
+.mac-scopes[hidden] { display: none; }
+.mac-scope-tab {
+    flex: 1; height: 20px; padding: 0 var(--s1);
+    font: inherit; font-size: var(--t-caption); color: var(--label-2);
+    background: none; border: none; border-radius: var(--r-sm); cursor: default;
+}
+.mac-scope-tab:hover { background: var(--control-bg-hover); }
+.mac-scope-tab.on { background: var(--mac-blue); color: #fff; font-weight: 600; }
+.mac-scope-tab:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--mac-blue) 25%, transparent); }
+.mac-preview .mac-scope-view { border-radius: var(--r-sm); background: #000; box-shadow: none; max-height: none; }
+
 /* Effect stack cards: one rounded inset per effect, in stack order. */
 .mac-fx {
     display: grid;

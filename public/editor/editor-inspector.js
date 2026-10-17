@@ -109,6 +109,18 @@ function updateInspector() {
                 <input type="range" id="insp_opacity" min="0" max="100" value="${Math.round((clip.opacity !== undefined ? clip.opacity : 1.0) * 100)}">
             </div>
         `;
+        const BL = window.ForgeCut && window.ForgeCut.Effects && window.ForgeCut.Effects.BLEND_LABELS;
+        if (BL) {
+            const cur = clip.blendMode || 'normal';
+            appearanceHtml += `
+            <div class="control-group">
+                <label>Blend</label>
+                <select id="insp_blend" data-history="self" class="w-full text-[11px] bg-surface-container border border-outline-variant/40 rounded px-1 py-0.5"
+                    onchange="setClipBlendMode('${clip.id}', this.value)">
+                    ${Object.entries(BL).map(([k, l]) => `<option value="${k}"${k === cur ? ' selected' : ''}>${l}</option>`).join('')}
+                </select>
+            </div>`;
+        }
 
         if (track.type === 'video' || track.type === 'image') {
             appearanceHtml += `
@@ -346,6 +358,38 @@ function updateInspector() {
                     <button class="material-symbols-outlined text-sm float-right" title="Remove" onclick="fxRemove('${clip.id}','${fx.id}')">delete</button></div>`;
             }
             const params = Object.entries(def.params).map(([name, spec]) => {
+                const sel = 'w-full text-[11px] bg-surface-container border border-outline-variant/40 rounded px-1 py-0.5';
+                if (spec.kind === 'color') {
+                    return `
+                <div class="flex items-center justify-between text-[10px] text-on-surface-variant">
+                    <span>${esc(spec.label)}</span>
+                    <input type="color" data-history="self" value="${esc(fx.params[name])}"
+                        onchange="fxSetValue('${clip.id}','${fx.id}','${name}',this.value)">
+                </div>`;
+                }
+                if (spec.kind === 'choice') {
+                    return `
+                <div class="text-[10px] text-on-surface-variant">
+                    <div class="mb-0.5">${esc(spec.label)}</div>
+                    <select data-history="self" class="${sel}" onchange="fxSetValue('${clip.id}','${fx.id}','${name}',this.value)">
+                        ${spec.options.map(o => `<option value="${esc(o)}"${o === fx.params[name] ? ' selected' : ''}>${esc(o.charAt(0).toUpperCase() + o.slice(1))}</option>`).join('')}
+                    </select>
+                </div>`;
+                }
+                if (spec.kind === 'lut') {
+                    const opts = window.fxLutOptions();
+                    return `
+                <div class="text-[10px] text-on-surface-variant">
+                    <div class="mb-0.5">${esc(spec.label)}</div>
+                    <div class="flex gap-1">
+                        <select data-history="self" class="${sel}" onchange="fxSetValue('${clip.id}','${fx.id}','${name}',this.value)">
+                            <option value="">${opts.length ? 'Choose a LUT…' : 'No LUTs in this project'}</option>
+                            ${opts.map(o => `<option value="${esc(o.id)}"${o.id === fx.params[name] ? ' selected' : ''}>${esc(o.name)}</option>`).join('')}
+                        </select>
+                        <button class="py-1 px-2 rounded text-[10px] whitespace-nowrap bg-surface-container border-none cursor-pointer text-on-surface hover:bg-surface-container-high" title="Import a .cube file" onclick="fxImportLut('${clip.id}','${fx.id}')">Import .cube…</button>
+                    </div>
+                </div>`;
+                }
                 const val = window.fxValue(clip, fx, name);
                 const on = window.fxHasKeyframeHere(clip, fx, name);
                 return `

@@ -135,6 +135,7 @@
             View: () => [
                 { label: 'Show Sidebar', checked: !document.getElementById('macBody').classList.contains('no-sidebar'), shortcut: '⌥⌘S', action: toggleSidebar },
                 { label: 'Show Inspector', checked: !document.getElementById('macBody').classList.contains('no-inspector'), shortcut: '⌥⌘I', action: toggleInspector },
+                { label: 'Show Video Scopes', checked: scopesVisible(), action: () => toggleScopes() },
                 'separator',
                 { label: 'Zoom In Timeline', shortcut: '⌘+', action: () => Mac.timeline.setZoom(Mac.timeline.getZoom() * 1.25) },
                 { label: 'Zoom Out Timeline', shortcut: '⌘−', action: () => Mac.timeline.setZoom(Mac.timeline.getZoom() * 0.8) },
@@ -632,6 +633,32 @@
             tc.textContent = `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}.${String(Math.floor((t % 1) * 100)).padStart(2, '0')}`;
         }
     }
+
+    /* Video scopes: a solid (not glass) panel over the preview's corner. The
+       drawing is shared (editor/editor-scopes.js); the panel is this shell's. */
+    let scopes = null;
+    function scopesVisible() {
+        const p = document.getElementById('macScopes');
+        return !!(p && !p.hidden);
+    }
+    function toggleScopes(force) {
+        const preview = document.getElementById('macPreview');
+        if (!preview || !window.ForgeCut || !window.ForgeCut.ScopesView) return;
+        let panel = document.getElementById('macScopes');
+        if (!panel) {
+            panel = document.createElement('div');
+            panel.id = 'macScopes';
+            panel.className = 'mac-scopes';
+            panel.setAttribute('aria-label', 'Video Scopes');
+            panel.hidden = true;
+            preview.append(panel);
+            scopes = window.ForgeCut.ScopesView.create(panel, { tabClass: 'mac-scope-tab', activeClass: 'on', canvasClass: 'mac-scope-view' });
+        }
+        const show = force === undefined ? panel.hidden : !!force;
+        panel.hidden = !show;
+        if (show) scopes.start(); else scopes.stop();
+    }
+    Mac.toggleScopes = toggleScopes;
 
     function refreshAll() {
         Mac.timeline.invalidate(true);

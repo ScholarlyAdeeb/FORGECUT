@@ -216,6 +216,74 @@
         return faceDetector;
     }
 
+    /* ── background removal (person segmentation) ────────────────────── */
+
+    const SEG_MODEL = 'https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_segmenter/float16/latest/selfie_segmenter.tflite';
+    const SEG_WIDTH = 256;            // the model's own input size; larger costs time, not quality
+    let segLoading = null;
+
+    /**
+     * Load MediaPipe's selfie segmenter once and hand the compositor a
+     * synchronous provider: frame in, person-confidence mask out. Registered
+     * lazily: the model is only fetched when a clip actually uses
+     * Remove Background.
+     */
+    function loadSegmenter() {
+        if (segLoading) return segLoading;
+        segLoading = (async () => {
+            const v = await import(`${MEDIAPIPE}/vision_bundle.mjs`);
+            const files = await v.FilesetResolver.forVisionTasks(`${MEDIAPIPE}/wasm`);
+            const make = (delegate) => v.ImageSegmenter.createFromOptions(files, {
+                baseOptions: { modelAssetPath: SEG_MODEL, delegate },
+                runningMode: 'IMAGE',
+                outputConfidenceMasks: true,
+                outputCategoryMask: false
+            });
+            let seg;
+            try { seg = await make('GPU'); } catch (e) { seg = await make('CPU'); }
+            const labels = (seg.getLabels && seg.getLabels()) || [];
+            // Single-output models give person confidence directly; two-class
+            // ones put the person in the non-background channel.
+            const personIdx = labels.length > 1 ? Math.max(0, labels.findIndex(l => !/background/i.test(l))) : 0;
+            const small = document.createElement('canvas');
+            const sctx = small.getContext('2d', { willReadFrequently: true });
+            const provider = (source) => {
+                const sw = source.videoWidth || source.naturalWidth || source.width;
+                const sh = source.videoHeight || source.naturalHeight || source.height;
+                if (!sw || !sh) return null;
+                const w = SEG_WIDTH, h = Math.max(1, Math.round(SEG_WIDTH * sh / sw));
+                if (small.width !== w || small.height !== h) { small.width = w; small.height = h; }
+                sctx.drawImage(source, 0, 0, w, h);
+                const r = seg.segment(small);
+                try {
+                    const m = r.confidenceMasks && r.confidenceMasks[Math.min(personIdx, r.confidenceMasks.length - 1)];
+                    if (!m) return null;
+                    return { width: m.width, height: m.height, data: Float32Array.from(m.getAsFloat32Array()) };
+                } finally {
+                    if (r.close) r.close();
+                }
+            };
+            if (typeof renderCanvasComposition === 'function') setTimeout(renderCanvasComposition, 0);
+            return { provider, labels, personIdx };
+        })().catch((e) => {
+            segLoading = null;           // allow a retry, e.g. after reconnecting
+            console.warn('[ForgeCut] background removal model failed to load:', e && e.message);
+            throw e;
+        });
+        // Register on every call (cheap), so the compositor always ends up
+        // with the real provider whatever was registered in between.
+        return segLoading.then((r) => {
+            window.ForgeCut.Compositor.setSegmenter(r.provider, loadSegmenter);
+            return { labels: r.labels, personIdx: r.personIdx };
+        });
+    }
+    if (window.ForgeCut && window.ForgeCut.Compositor) {
+        // Not loaded yet: the compositor calls the loader the first time a
+        // stack needs it, and export awaits it via Compositor.prepare().
+        window.ForgeCut.Compositor.setSegmenter(null, loadSegmenter);
+    }
+    window.smartLoadSegmenter = loadSegmenter;
+
     window.smartAutoReframe = async function (opts) {
         if (busy || !RF()) return;
         const o = Object.assign({ zoom: 1, rate: 5 }, opts || {});

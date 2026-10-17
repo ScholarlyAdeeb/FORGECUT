@@ -84,6 +84,7 @@
             currentTime: state.currentTime,
             zoom: state.zoom,
             tracks: state.tracks,
+            luts: state.luts || {},
             bgType: state.bgType,
             bgColor: state.bgColor,
             bgGradientStart: state.bgGradientStart,
@@ -114,6 +115,7 @@
                 const data = JSON.parse(e.target.result);
                 if (data.tracks) {
                     state.tracks = data.tracks;
+                    state.luts = data.luts && typeof data.luts === 'object' ? data.luts : {};
                     state.duration = data.duration || 30;
                     state.currentTime = data.currentTime || 0;
                     state.zoom = data.zoom || 20;

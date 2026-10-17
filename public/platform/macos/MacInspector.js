@@ -173,6 +173,19 @@
                     b.append(rangeField('Blur', () => clip.blur || 0,
                         v => { clip.blur = v; }, 0, 50, v => Math.round(v) + ' px'));
                 }
+                const BL = window.ForgeCut && window.ForgeCut.Effects && window.ForgeCut.Effects.BLEND_LABELS;
+                if (BL) {
+                    const sel = el('select', 'mac-select');
+                    sel.dataset.history = 'self';     // setClipBlendMode records its own undo step
+                    Object.entries(BL).forEach(([k, l]) => {
+                        const o = el('option', null, l);
+                        o.value = k;
+                        if ((clip.blendMode || 'normal') === k) o.selected = true;
+                        sel.append(o);
+                    });
+                    sel.addEventListener('change', () => window.setClipBlendMode(clip.id, sel.value));
+                    b.append(field('Blend', sel));
+                }
             }));
         }
 
@@ -211,6 +224,42 @@
                     card.append(top);
                     if (def) {
                         Object.entries(def.params).forEach(([name, spec]) => {
+                            if (spec.kind === 'color') {
+                                const c = el('input', 'mac-input');
+                                c.type = 'color';
+                                c.style.padding = '1px';
+                                c.dataset.history = 'self';
+                                c.value = fx.params[name];
+                                c.addEventListener('change', () => window.fxSetValue(clip.id, fx.id, name, c.value));
+                                card.append(field(spec.label, c));
+                                return;
+                            }
+                            if (spec.kind === 'choice' || spec.kind === 'lut') {
+                                const sel = el('select', 'mac-select');
+                                sel.dataset.history = 'self';
+                                const opts = spec.kind === 'choice'
+                                    ? spec.options.map(o => ({ id: o, name: o.charAt(0).toUpperCase() + o.slice(1) }))
+                                    : [{ id: '', name: window.fxLutOptions().length ? 'Choose a LUT…' : 'No LUTs in project' }].concat(window.fxLutOptions());
+                                opts.forEach(o => {
+                                    const op = el('option', null, o.name);
+                                    op.value = o.id;
+                                    if (o.id === fx.params[name]) op.selected = true;
+                                    sel.append(op);
+                                });
+                                sel.addEventListener('change', () => window.fxSetValue(clip.id, fx.id, name, sel.value));
+                                if (spec.kind === 'lut') {
+                                    const imp = el('button', 'mac-btn', 'Import…');
+                                    imp.type = 'button';
+                                    imp.title = 'Import a .cube file';
+                                    imp.addEventListener('click', () => window.fxImportLut(clip.id, fx.id));
+                                    const row = el('div', 'mac-row2');
+                                    row.append(sel, imp);
+                                    card.append(field(spec.label, row));
+                                } else {
+                                    card.append(field(spec.label, sel));
+                                }
+                                return;
+                            }
                             const input = el('input', 'mac-range');
                             input.type = 'range';
                             input.dataset.history = 'self';   // fxSetParam commits one step per drag

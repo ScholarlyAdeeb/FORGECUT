@@ -67,6 +67,13 @@ function renderCanvasComposition() {
 
             ctx.save();
 
+            // Blend mode: how this clip combines with what is already on the
+            // canvas. Native 2D compositing, so it covers every clip type and
+            // exports through this same path. Unknown values fall back to normal.
+            const blendOp = (window.ForgeCut && window.ForgeCut.Effects &&
+                window.ForgeCut.Effects.BLEND_MODES[clip.blendMode]) || 'source-over';
+            ctx.globalCompositeOperation = blendOp;
+
             // Calculate animated properties if AnimationEngine is loaded
             let animProps = { offsetX: 0, offsetY: 0, scale: 1.0, rotation: 0, opacity: 1.0 };
             if (window.ForgeCut && window.ForgeCut.AnimationEngine) {
@@ -104,13 +111,20 @@ function renderCanvasComposition() {
                         // Effect stack: the compositor returns a processed
                         // frame the same size as `el`, so everything below
                         // draws it with unchanged geometry. No effects (or a
-                        // video with no frame yet) leaves src === el — the
-                        // original path, untouched.
+                        // video that has never decoded a frame) leaves
+                        // src === el — the original path, untouched.
+                        //
+                        // readyState drops below HAVE_CURRENT_DATA during
+                        // every seek, while the element still holds (and
+                        // drawImage still draws) its last frame. Gating on
+                        // readyState alone made effects flicker off on each
+                        // scrub or undo, so remember that a frame existed.
+                        if (el.tagName === 'VIDEO' && el.readyState >= 2) el.__fcHasFrame = true;
                         let src = el;
                         if (clip.effects && clip.effects.length && window.ForgeCut.Effects && window.ForgeCut.Compositor &&
-                            !(el.tagName === 'VIDEO' && el.readyState < 2)) {
+                            !(el.tagName === 'VIDEO' && !el.__fcHasFrame)) {
                             const stack = window.ForgeCut.Effects.resolveStack(clip.effects,
-                                (key, base) => window.getInterpolatedValue(clip, key, base));
+                                (key, base) => window.getInterpolatedValue(clip, key, base), window.fxResources);
                             if (stack.length) src = window.ForgeCut.Compositor.process(el, stack);
                         }
 
@@ -145,6 +159,7 @@ function renderCanvasComposition() {
 
                             ctx.restore();
                             ctx.save();
+                            ctx.globalCompositeOperation = blendOp;
                             window.ForgeCut.TransitionEngine.applyTransition(
                                 ctx,
                                 window._offscreenCanvasFrom,

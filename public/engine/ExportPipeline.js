@@ -1065,6 +1065,21 @@
         }
 
         await registry.probe();
+        // Effects that need a model (background removal) must be ready before
+        // frame 1, or the first frames would export without them.
+        const C = typeof window !== 'undefined' && window.ForgeCut && window.ForgeCut.Compositor;
+        if (C && C.prepare && appState && Array.isArray(appState.tracks)) {
+            const lists = [];
+            appState.tracks.forEach(t => (t.clips || []).forEach(c => { if (Array.isArray(c.effects)) lists.push(c.effects); }));
+            if (lists.length) {
+                const ready = await C.prepare(lists);
+                if (!ready.segmentation) {
+                    const e = new Error('Background removal could not load its model, so this export would be missing it. Check your connection and try again.');
+                    e.code = 'ENOTREADY';
+                    throw e;
+                }
+            }
+        }
         const plan = registry.resolve(config);
         if (!plan.ok) {
             job.backend = null;
