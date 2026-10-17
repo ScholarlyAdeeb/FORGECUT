@@ -106,6 +106,14 @@
     /* ── scene detection ─────────────────────────────────────────────── */
 
     async function scenesFromServer(file, threshold) {
+        // On a static host (Vercel) there is no export server. Ask the probe
+        // instead of uploading the whole file just to be told so.
+        const CR = window.ForgeCut && window.ForgeCut.CapabilityRegistry;
+        if (CR) {
+            try { await CR.probe(); } catch (e) { /* treated as unavailable below */ }
+            if (!CR.server || !CR.server.available) return null;
+            if (CR.server.maxUploadBytes && file.size > CR.server.maxUploadBytes) return null;
+        }
         let res;
         try {
             res = await fetch(`/api/export/analyze/scenes?threshold=${encodeURIComponent(threshold)}`, {
@@ -116,7 +124,7 @@
         } catch (e) {
             return null;                          // no server: use the browser
         }
-        if (res.status === 404 || res.status === 405 || res.status === 503) return null;
+        if (res.status === 404 || res.status === 405 || res.status === 413 || res.status === 503) return null;
         const body = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(body.error || `Server returned ${res.status}`);
         return body.cuts || [];

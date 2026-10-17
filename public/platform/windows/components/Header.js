@@ -199,6 +199,28 @@ class ForgeCutHeader extends HTMLElement {
                             <span class="text-[10px] text-on-surface">Timer</span>
                         </button>
                     </div>
+                    <button class="ribbon-button" onclick="smartAutoCaptions()" title="Transcribe the project's speech into word-timed captions (runs in your browser)">
+                        <span class="material-symbols-outlined text-[24px] text-primary">subtitles</span>
+                        <span class="text-[11px] text-on-surface">Auto Captions</span>
+                    </button>
+                    <div class="grid grid-cols-2 gap-x-2 gap-y-0.5">
+                        <button class="flex items-center gap-1 hover:bg-surface-container-high px-2 py-0.5 rounded transition-colors text-left" onclick="smartImportCaptions()" title="Turn an SRT or VTT file into captions">
+                            <span class="material-symbols-outlined text-[16px] text-primary">upload_file</span>
+                            <span class="text-[10px] text-on-surface">Import SRT</span>
+                        </button>
+                        <button class="flex items-center gap-1 hover:bg-surface-container-high px-2 py-0.5 rounded transition-colors text-left" onclick="smartExportSRT()" title="Save the captions as an SRT file">
+                            <span class="material-symbols-outlined text-[16px] text-primary">download</span>
+                            <span class="text-[10px] text-on-surface">Export SRT</span>
+                        </button>
+                        <button class="flex items-center gap-1 hover:bg-surface-container-high px-2 py-0.5 rounded transition-colors text-left" onclick="smartCycleCaptionStyle()" title="Switch to the next caption style">
+                            <span class="material-symbols-outlined text-[16px] text-primary">format_paint</span>
+                            <span class="text-[10px] text-on-surface">Style</span>
+                        </button>
+                        <button class="flex items-center gap-1 hover:bg-surface-container-high px-2 py-0.5 rounded transition-colors text-left" onclick="smartRemoveCaptions()" title="Remove all captions">
+                            <span class="material-symbols-outlined text-[16px] text-primary">subtitles_off</span>
+                            <span class="text-[10px] text-on-surface">Remove</span>
+                        </button>
+                    </div>
                 </div>
                 <span class="font-ribbon-group-label text-ribbon-group-label text-on-surface-variant/60 uppercase tracking-wider py-0.5">Text</span>
             </div>
@@ -253,6 +275,10 @@ class ForgeCutHeader extends HTMLElement {
                     <button class="ribbon-button" onclick="setAspectRatio(4, 5)">
                         <span class="material-symbols-outlined text-[24px] text-on-surface-variant">crop_portrait</span>
                         <span class="text-[11px] text-on-surface">4:5</span>
+                    </button>
+                    <button class="ribbon-button" onclick="smartAutoReframe()" title="Keep the subject of the selected video clip in frame on this canvas">
+                        <span class="material-symbols-outlined text-[24px] text-on-surface-variant">center_focus_strong</span>
+                        <span class="text-[11px] text-on-surface">Auto Reframe</span>
                     </button>
                 </div>
                 <span class="font-ribbon-group-label text-ribbon-group-label text-on-surface-variant/60 uppercase tracking-wider py-0.5">Canvas</span>

@@ -150,6 +150,13 @@
                 'separator',
                 { label: 'Remove Silence…', action: () => Promise.resolve(call('smartRemoveSilence')).then(refreshAll) },
                 { label: 'Detect Scenes…', enabled: hasSelection(), action: () => Promise.resolve(call('smartDetectScenes')).then(refreshAll) },
+                { label: 'Auto Reframe…', enabled: hasSelection(), action: () => Promise.resolve(call('smartAutoReframe')).then(refreshAll) },
+                'separator',
+                { label: 'Auto Captions…', action: () => Promise.resolve(call('smartAutoCaptions')).then(refreshAll) },
+                { label: 'Import Captions…', action: () => Promise.resolve(call('smartImportCaptions')).then(refreshAll) },
+                { label: 'Export Captions as SRT…', action: () => call('smartExportSRT') },
+                { label: 'Next Caption Style', action: () => { call('smartCycleCaptionStyle'); refreshAll(); } },
+                { label: 'Remove Captions', action: () => { call('smartRemoveCaptions'); refreshAll(); } },
                 'separator',
                 { label: 'Centre on Canvas', enabled: hasSelection(), action: () => { window.positionObject && positionObject(state.selectedClipId, 'center'); refreshAll(); } }
             ],
