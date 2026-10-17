@@ -10,3 +10,7 @@ out/
 # Generated media-import test corpus (~2.2GB); regenerate with
 # test/media-import/make-media.sh
 public/__testmedia/
+
+# Static build output (npm run build)
+dist/
+.vercel/

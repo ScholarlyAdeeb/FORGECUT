@@ -1,0 +1,10 @@
+# Vercel serves dist/ as static files. The Node export server is for
+# self-hosting only; leaving it out stops Vercel from detecting server.js as
+# an Express app and turning it into a (time-limited) serverless function.
+server.js
+server/
+render.yaml
+test/
+stitch_backup/
+public/__testmedia/
+dist/

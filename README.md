@@ -90,3 +90,33 @@ ForgeCut is organized around a professional NLE workflow:
 │                     MULTI-TRACK TIMELINE                      │
 │                                                               │
 └───────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 🤖 AI Shorts Tools
+
+All of these run in the browser, so they work on a static deployment with no server:
+
+- **Auto Captions** (Insert › Text): Whisper transcribes the project's audio into word-timed captions, written as ordinary text clips in one of four styles. The model (42 MB) downloads on first use and is cached by the browser after that. Captions can also be imported from SRT/VTT and exported as SRT.
+- **Auto Reframe** (Design › Canvas): MediaPipe face detection, falling back to motion, keeps the subject of a 16:9 clip in frame on a 9:16 canvas. The result is x/y keyframes you can edit afterwards.
+- **Remove Silence** and **Detect Scenes** (Home › Timeline).
+
+On macOS all of these are in the Clip menu.
+
+---
+
+## 🚀 Deploying
+
+### Vercel (static, recommended)
+
+```bash
+npm run build            # → dist/  (app + vendored FFmpeg.wasm)
+npm run preview:static   # serve dist/ exactly as Vercel will, on :4173
+```
+
+`vercel.json` runs the same build and sets the cross-origin isolation headers FFmpeg.wasm needs. No serverless functions are used: exports run through WebCodecs and FFmpeg.wasm, and every analysis tool runs in the browser.
+
+### Self-hosted Node (optional)
+
+`npm start` runs `server.js`, which adds server-side FFmpeg: faster frame-sequence exports, ProRes/FFV1 masters, and FFmpeg scene detection. The client uses it automatically when it can reach it, and falls back when it cannot.

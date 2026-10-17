@@ -1,7 +1,7 @@
 {
   "name": "forgecut-web",
   "version": "1.0.0",
-  "description": "ForgeCut \u2014 browser-based multi-track video editor",
+  "description": "ForgeCut — browser-based multi-track video editor",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -9,7 +9,9 @@
     "check:boundaries": "node scripts/check-platform-boundaries.js",
     "test": "node --test test/unit/*.test.js",
     "check": "npm run check:boundaries && npm run check:wiring && npm test",
-    "check:wiring": "node scripts/check-dom-wiring.js"
+    "check:wiring": "node scripts/check-dom-wiring.js",
+    "build": "node scripts/build-static.js",
+    "preview:static": "node scripts/serve-static.js"
   },
   "keywords": [],
   "author": "",
