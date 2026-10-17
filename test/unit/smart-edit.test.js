@@ -266,3 +266,11 @@ test('intersectSpans keeps only overlapping parts', () => {
         [{ start: 2, end: 4 }, { start: 6, end: 7 }, { start: 8, end: 9 }]);
     assert.deepStrictEqual(SE.intersectSpans([{ start: 0, end: 1 }], []), []);
 });
+
+test('cut pieces do not share an effect stack', () => {
+    const tracks = [{ id: 'v', clips: [{ id: 'a', startTime: 0, duration: 10, effects: [{ id: 'fx1', type: 'adjust', enabled: true, params: { brightness: 1.5 } }] }] }];
+    const out = SE.splitTracksAt(tracks, 'a', [5]).tracks[0].clips;
+    out[0].effects[0].params.brightness = 2;
+    assert.strictEqual(out[1].effects[0].params.brightness, 1.5);
+    assert.strictEqual(tracks[0].clips[0].effects[0].params.brightness, 1.5);
+});

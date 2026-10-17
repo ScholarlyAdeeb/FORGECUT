@@ -22,6 +22,28 @@
     }
 
     /**
+     * Deep copy of plain clip data: arrays and plain objects are copied all the
+     * way down, anything else (numbers, strings, a stray element reference) is
+     * kept as is.
+     *
+     * Clips used to be copied one level deep, with shapeProps and animations
+     * special-cased. Everything else nested — keyframes, effect stacks, gain
+     * automation — stayed SHARED between the live clip and every snapshot, so
+     * editing a keyframe also edited history and undo could not bring it back.
+     */
+    function clonePlain(v) {
+        if (Array.isArray(v)) return v.map(clonePlain);
+        if (v && typeof v === 'object') {
+            const proto = Object.getPrototypeOf(v);
+            if (proto !== Object.prototype && proto !== null) return v;
+            const out = {};
+            for (const k of Object.keys(v)) out[k] = clonePlain(v[k]);
+            return out;
+        }
+        return v;
+    }
+
+    /**
      * Deep clone the essential state properties (exclude DOM elements, media blobs).
      */
     function cloneState(state) {
@@ -33,13 +55,7 @@
             name: track.name,
             locked: track.locked,
             visible: track.visible,
-            clips: track.clips.map(clip => Object.assign({}, clip, {
-                // Deep clone sub-objects
-                shapeProps: clip.shapeProps ? Object.assign({}, clip.shapeProps, {
-                    shadow: clip.shapeProps.shadow ? Object.assign({}, clip.shapeProps.shadow) : null
-                }) : undefined,
-                animations: clip.animations ? Object.assign({}, clip.animations) : undefined
-            }))
+            clips: track.clips.map(clonePlain)
         }));
 
         // Clone timeline metadata
@@ -69,12 +85,7 @@
             name: track.name,
             locked: track.locked,
             visible: track.visible,
-            clips: track.clips.map(clip => Object.assign({}, clip, {
-                shapeProps: clip.shapeProps ? Object.assign({}, clip.shapeProps, {
-                    shadow: clip.shapeProps && clip.shapeProps.shadow ? Object.assign({}, clip.shapeProps.shadow) : null
-                }) : undefined,
-                animations: clip.animations ? Object.assign({}, clip.animations) : undefined
-            }))
+            clips: track.clips.map(clonePlain)
         }));
 
         _stateRef.currentTime = snapshot.currentTime;

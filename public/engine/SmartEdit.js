@@ -134,6 +134,9 @@
                 copy.keyframes[k] = (c.keyframes[k] || []).map(f => Object.assign({}, f));
             }
         }
+        if (Array.isArray(c.effects)) {
+            copy.effects = c.effects.map(e => Object.assign({}, e, { params: Object.assign({}, e.params) }));
+        }
         return copy;
     }
 

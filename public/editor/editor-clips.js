@@ -54,6 +54,10 @@ function splitClipAtPlayhead(clipId) {
     const newClipId = `clip_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
     const newClip = {
         ...clip,
+        // The spread above is shallow; the two halves must not share nested
+        // keyframes or effect stacks, or editing one edits the other.
+        keyframes: clip.keyframes ? JSON.parse(JSON.stringify(clip.keyframes)) : clip.keyframes,
+        effects: clip.effects ? JSON.parse(JSON.stringify(clip.effects)) : clip.effects,
         id: newClipId,
         startTime: playheadLocal,
         duration: originalDuration - splitPoint,
