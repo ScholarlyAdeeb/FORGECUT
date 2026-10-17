@@ -114,6 +114,8 @@ On macOS all of these are in the Clip menu.
 
 ### Vercel (static, recommended)
 
+Step-by-step instructions and a post-deploy checklist are in [DEPLOY.md](DEPLOY.md).
+
 ```bash
 npm run build            # → dist/  (app + vendored FFmpeg.wasm)
 npm run preview:static   # serve dist/ exactly as Vercel will, on :4173

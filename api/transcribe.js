@@ -142,8 +142,12 @@ async function transcribe(wav, language, cfg, fetchImpl) {
     return normalise(r.json);
 }
 
+/**
+ * Read the raw request stream. Deliberately never touches req.body: on
+ * Vercel's Node runtime that is a lazy getter that parses (and consumes)
+ * the stream by content type, which would leave nothing to read here.
+ */
 function readBody(req, limit) {
-    if (Buffer.isBuffer(req.body)) return Promise.resolve(req.body);
     return new Promise((resolve, reject) => {
         const parts = []; let n = 0, done = false;
         req.on('data', (c) => {
