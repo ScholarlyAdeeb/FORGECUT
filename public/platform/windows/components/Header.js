@@ -98,6 +98,14 @@ class ForgeCutHeader extends HTMLElement {
                         <span class="material-symbols-outlined text-[24px] text-on-surface-variant">delete</span>
                         <span class="text-[11px] text-on-surface">Delete</span>
                     </button>
+                    <button class="ribbon-button" onclick="smartRemoveSilence()" title="Remove silent sections from every unlocked track">
+                        <span class="material-symbols-outlined text-[24px] text-on-surface-variant">graphic_eq</span>
+                        <span class="text-[11px] text-on-surface">Remove Silence</span>
+                    </button>
+                    <button class="ribbon-button" onclick="smartDetectScenes()" title="Split the selected video clip at scene changes">
+                        <span class="material-symbols-outlined text-[24px] text-on-surface-variant">movie_filter</span>
+                        <span class="text-[11px] text-on-surface">Detect Scenes</span>
+                    </button>
                 </div>
                 <span class="font-ribbon-group-label text-ribbon-group-label text-on-surface-variant/60 uppercase tracking-wider py-0.5">Timeline</span>
             </div>

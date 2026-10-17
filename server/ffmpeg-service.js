@@ -31,6 +31,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 
 const EC = require('../public/engine/ExportConfig.js');
+const SmartEdit = require('../public/engine/SmartEdit.js');
 
 const FFMPEG = process.env.FORGECUT_FFMPEG || 'ffmpeg';
 const FFPROBE = process.env.FORGECUT_FFPROBE || 'ffprobe';
@@ -738,7 +739,74 @@ function shutdownSync() {
     try { fs.rmSync(ROOT_TMP, { recursive: true, force: true }); } catch (e) { /* best effort */ }
 }
 
+/* ────────────────────────── scene detection ────────────────────────── */
+
+const SCENE_TIMEOUT_MS = Number(process.env.FORGECUT_SCENE_TIMEOUT_MS || 5 * 60 * 1000);
+const MAX_SCENE_JOBS = 2;
+let sceneJobs = 0;
+
+/**
+ * Arguments for a scene-change pass. The threshold is re-validated here and
+ * rounded to a plain decimal, so the only caller-derived text in the filter
+ * graph is digits and a dot.
+ */
+function buildSceneArgs(inputPath, threshold) {
+    const t = SmartEdit.validateSceneThreshold(threshold);
+    return [
+        '-hide_banner', '-nostdin', '-loglevel', 'info',
+        '-i', inputPath,
+        '-an', '-sn', '-dn',
+        '-vf', `select='gt(scene,${t.toFixed(3)})',showinfo`,
+        '-f', 'null', '-'
+    ];
+}
+
+/**
+ * Upload-and-analyse in one request. `writeSource(path)` must resolve once the
+ * source is fully on disk. The temp directory is removed in every path.
+ */
+async function detectScenes(writeSource, threshold) {
+    const t = SmartEdit.validateSceneThreshold(threshold);
+    if (sceneJobs >= MAX_SCENE_JOBS) {
+        throw Object.assign(new Error('Scene detection is busy; try again shortly.'), { code: 'EBUSY' });
+    }
+    sceneJobs++;
+    const dir = path.join(ROOT_TMP, newJobId());
+    let proc = null;
+    try {
+        await fsp.mkdir(dir, { recursive: true });
+        const input = safeJoin(dir, 'source.bin');
+        await writeSource(input);
+        const stderr = await new Promise((resolve, reject) => {
+            proc = spawn(FFMPEG, buildSceneArgs(input, t), { shell: false, windowsHide: true });
+            // showinfo prints one line per SELECTED frame, so output scales
+            // with cuts, not with length — but cap it anyway.
+            let buf = '';
+            proc.stderr.setEncoding('utf8');
+            proc.stderr.on('data', (d) => { if (buf.length < 8 * 1024 * 1024) buf += d; });
+            proc.stdout.resume();
+            const timer = setTimeout(() => {
+                killTree(proc);
+                reject(Object.assign(new Error('Scene detection timed out.'), { code: 'ETIMEOUT' }));
+            }, SCENE_TIMEOUT_MS);
+            proc.on('error', (e) => { clearTimeout(timer); reject(e); });
+            proc.on('close', (code, signal) => {
+                clearTimeout(timer);
+                if (code === 0) resolve(buf);
+                else reject(Object.assign(new Error('This file could not be read as video.'),
+                    { code: 'EANALYSE', detail: describeFfmpegFailure(buf, code, signal) }));
+            });
+        });
+        return SmartEdit.parseShowinfo(stderr);
+    } finally {
+        if (proc) await killTree(proc);
+        await rmWithRetry(dir).catch(() => {});
+        sceneJobs--;
+    }
+}
+
 module.exports = {
+    buildSceneArgs, detectScenes,
     FFMPEG, FFPROBE, ROOT_TMP, STATES, MAX_UPLOAD_BYTES, JOB_TIMEOUT_MS,
     probeCapabilities, buildArgs, buildFrameArgs, safeJoin,
     createJob, getJob, encodeJob, encodeJobFromFrames, validateOutput, cancelJob, disposeJob, cleanupJob,

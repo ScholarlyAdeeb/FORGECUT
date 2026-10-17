@@ -148,6 +148,9 @@
                 { label: 'Trim to Playhead', enabled: hasSelection(), action: () => { call('triggerTrim'); refreshAll(); } },
                 { label: 'Ripple Delete', enabled: hasSelection(), action: () => { call('timelineRippleDelete'); refreshAll(); } },
                 'separator',
+                { label: 'Remove Silence…', action: () => Promise.resolve(call('smartRemoveSilence')).then(refreshAll) },
+                { label: 'Detect Scenes…', enabled: hasSelection(), action: () => Promise.resolve(call('smartDetectScenes')).then(refreshAll) },
+                'separator',
                 { label: 'Centre on Canvas', enabled: hasSelection(), action: () => { window.positionObject && positionObject(state.selectedClipId, 'center'); refreshAll(); } }
             ],
             Help: () => [

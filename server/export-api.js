@@ -19,6 +19,7 @@ const fsp = require('node:fs/promises');
 
 const svc = require('./ffmpeg-service.js');
 const EC = require('../public/engine/ExportConfig.js');
+const SmartEdit = require('../public/engine/SmartEdit.js');
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -335,6 +336,54 @@ function createRouter() {
         res.setHeader('Content-Disposition',
             `attachment; filename="${safe.replace(/[^\x20-\x7e]/g, '_')}"; filename*=UTF-8''${encodeURIComponent(safe)}`);
         fs.createReadStream(job.outputPath).pipe(res);
+    });
+
+    /**
+     * Scene-change analysis. The request body is the raw media file; the
+     * response is `{ cuts: [seconds...] }`. Nothing is kept afterwards — the
+     * upload lives in a throwaway directory for the length of this request.
+     */
+    router.post('/analyze/scenes', async (req, res) => {
+        const threshold = req.query.threshold != null ? String(req.query.threshold) : '0.3';
+        try {
+            SmartEdit.validateSceneThreshold(threshold);
+        } catch (e) {
+            return res.status(400).json({ error: e.message });
+        }
+        const caps = await svc.probeCapabilities();
+        if (!caps.available) return res.status(503).json({ error: 'FFmpeg is not available on this server.' });
+
+        const writeSource = (target) => new Promise((resolve, reject) => {
+            let received = 0;
+            const out = fs.createWriteStream(target);
+            let failed = false;
+            const fail = (status, message) => {
+                if (failed) return;
+                failed = true;
+                req.unpipe(out);
+                out.destroy();
+                reject(Object.assign(new Error(message), { status }));
+            };
+            req.on('data', (chunk) => {
+                received += chunk.length;
+                if (received > svc.MAX_UPLOAD_BYTES) {
+                    fail(413, `Upload exceeds the ${Math.round(svc.MAX_UPLOAD_BYTES / 1048576)} MB limit.`);
+                }
+            });
+            req.on('aborted', () => fail(400, 'Upload aborted.'));
+            out.on('error', (err) => fail(500, `Could not write upload: ${err.message}`));
+            out.on('finish', () => received ? resolve() : fail(400, 'Upload was empty.'));
+            req.pipe(out);
+        });
+
+        try {
+            const cuts = await svc.detectScenes(writeSource, threshold);
+            res.json({ ok: true, cuts });
+        } catch (e) {
+            const status = e.status ||
+                ({ EBUSY: 429, ETIMEOUT: 504, EANALYSE: 422 })[e.code] || 500;
+            if (!res.headersSent) res.status(status).json({ error: e.message });
+        }
     });
 
     /** Cancel a running job, or discard a finished one. */

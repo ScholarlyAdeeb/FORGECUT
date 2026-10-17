@@ -119,3 +119,19 @@ test('FFmpeg failures are translated into actionable messages', () => {
     assert.match(d('height not divisible by 2', 1), /odd dimensions/i);
     assert.match(d('', 1), /exited with code 1/);
 });
+
+test('scene detection arguments', async (t) => {
+    await t.test('threshold reaches the filter only as a plain decimal', () => {
+        const args = svc.buildSceneArgs('/tmp/x/source.bin', '0.4');
+        const vf = args[args.indexOf('-vf') + 1];
+        assert.strictEqual(vf, "select='gt(scene,0.400)',showinfo");
+        assert.strictEqual(args[args.indexOf('-i') + 1], '/tmp/x/source.bin');
+        assert.deepStrictEqual(args.slice(-3), ['-f', 'null', '-']);
+    });
+
+    await t.test('filter-graph injection attempts are refused', () => {
+        for (const bad of ["0.3)',drawtext=text=x", '0.3,1', '1', '0', 'abc']) {
+            assert.throws(() => svc.buildSceneArgs('/tmp/x/source.bin', bad), `accepted ${bad}`);
+        }
+    });
+});
