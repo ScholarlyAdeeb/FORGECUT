@@ -52,16 +52,28 @@ function splitClipAtPlayhead(clipId) {
     clip.duration = splitPoint;
 
     const newClipId = `clip_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+    // Where the split lands in the SOURCE — not the same as splitPoint when
+    // the clip is sped up or ramped. Computed before clip.duration changes.
+    const TM = window.ForgeCut && window.ForgeCut.TimeMap;
+    const sourceAtSplit = TM ? TM.sourceTime(Object.assign({}, clip, { duration: originalDuration }), splitPoint)
+        : (clip.trimStart || 0) + splitPoint;
+    const rebase = (kf) => {
+        if (!kf || Array.isArray(kf)) return kf ? JSON.parse(JSON.stringify(kf)) : kf;
+        const out = {};
+        Object.keys(kf).forEach(k => { out[k] = (kf[k] || []).map(f => Object.assign({}, f, { time: f.time - splitPoint })); });
+        return out;
+    };
     const newClip = {
         ...clip,
         // The spread above is shallow; the two halves must not share nested
-        // keyframes or effect stacks, or editing one edits the other.
-        keyframes: clip.keyframes ? JSON.parse(JSON.stringify(clip.keyframes)) : clip.keyframes,
+        // keyframes or effect stacks, or editing one edits the other. The
+        // tail's keyframes are clip-local, so they shift to its new start.
+        keyframes: rebase(clip.keyframes),
         effects: clip.effects ? JSON.parse(JSON.stringify(clip.effects)) : clip.effects,
         id: newClipId,
         startTime: playheadLocal,
         duration: originalDuration - splitPoint,
-        trimStart: (clip.trimStart || 0) + splitPoint
+        trimStart: sourceAtSplit
     };
     track.clips.push(newClip);
 
@@ -74,12 +86,15 @@ function splitClipAtPlayhead(clipId) {
             linkedClip.duration = splitPoint;
 
             const newLinkedClipId = `clip_${Date.now()}_linked_${Math.random().toString(36).substr(2, 5)}`;
+            const linkedSource = TM ? TM.sourceTime(Object.assign({}, linkedClip, { duration: originalLinkedDuration }), splitPoint)
+                : (linkedClip.trimStart || 0) + splitPoint;
             const newLinkedClip = {
                 ...linkedClip,
+                keyframes: rebase(linkedClip.keyframes),
                 id: newLinkedClipId,
                 startTime: playheadLocal,
                 duration: originalLinkedDuration - splitPoint,
-                trimStart: (linkedClip.trimStart || 0) + splitPoint,
+                trimStart: linkedSource,
                 linkedClipId: newClipId
             };
             linkedTrack.clips.push(newLinkedClip);

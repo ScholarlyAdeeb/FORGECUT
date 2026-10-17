@@ -294,12 +294,19 @@
                 // an offline seek never sees. Without folding it into the source
                 // time here, a 2x clip previewed at 2x but exported at 1x - a
                 // preview-only behaviour failing silently at render.
+                // Ramps included: TimeMap integrates the speed curve exactly.
+                const TM = window.ForgeCut && window.ForgeCut.TimeMap;
                 const speed = (clip.playbackSpeed !== undefined && clip.playbackSpeed > 0)
                     ? clip.playbackSpeed : 1;
 
                 // Clamp: seeking past the end never fires 'seeked'.
-                let target = (time - clip.startTime) * speed + (clip.trimStart || 0);
-                target = Math.max(0, Math.min(target, Math.max(0, el.duration - 1e-3)));
+                let target = TM ? TM.sourceTime(clip, time - clip.startTime)
+                    : (time - clip.startTime) * speed + (clip.trimStart || 0);
+                // +0.1 ms: a computed time can land a hair BEFORE a frame
+                // boundary (0.49999998 for 0.5), and the element then rightly
+                // shows the previous frame. Measured as exact one-frame jumps
+                // in tracking; trim and speed arithmetic produce the same here.
+                target = Math.max(0, Math.min(target + 1e-4, Math.max(0, el.duration - 1e-3)));
 
                 // A frame is ~1/fps wide; anything closer than half that is
                 // already the right frame and re-seeking only costs time.
@@ -336,7 +343,61 @@
             }));
     }
 
-    function canvasToBlob(canvas, type, quality) {
+    /**
+     * Encode a frame. On the main thread, canvas.toBlob (and convertToBlob)
+     * only completes on a rendering opportunity, so once the export tab is in
+     * the background every frame waits about a second: measured 1,000 ms per
+     * frame against 6-17 ms for the same PNG encoded in a worker. A long
+     * export is exactly when people switch tabs, so frames are snapshotted
+     * with createImageBitmap (synchronous, not throttled) and encoded in a
+     * worker. The output is the same PNG encoder; the main-thread path stays
+     * as a fallback.
+     */
+    let encodeWorker = null, encodeSeq = 0;
+    const encodeWaiters = new Map();
+    function frameWorker() {
+        if (encodeWorker !== null) return encodeWorker;
+        try {
+            if (typeof Worker === 'undefined' || typeof OffscreenCanvas === 'undefined' || typeof createImageBitmap === 'undefined') {
+                encodeWorker = false;
+                return false;
+            }
+            const src = `self.onmessage = async (e) => {
+                const { id, bmp, type, quality } = e.data;
+                try {
+                    const oc = new OffscreenCanvas(bmp.width, bmp.height);
+                    oc.getContext('2d').drawImage(bmp, 0, 0);
+                    bmp.close();
+                    const blob = await oc.convertToBlob({ type, quality });
+                    self.postMessage({ id, blob });
+                } catch (err) { self.postMessage({ id, error: String(err && err.message || err) }); }
+            };`;
+            encodeWorker = new Worker(URL.createObjectURL(new Blob([src], { type: 'text/javascript' })));
+            encodeWorker.onmessage = (e) => {
+                const w = encodeWaiters.get(e.data.id);
+                if (!w) return;
+                encodeWaiters.delete(e.data.id);
+                if (e.data.blob) w.resolve(e.data.blob); else w.reject(new Error(e.data.error || 'Frame encode failed.'));
+            };
+            encodeWorker.onerror = () => { encodeWorker = false; };
+        } catch (e) {
+            encodeWorker = false;
+        }
+        return encodeWorker;
+    }
+
+    async function canvasToBlob(canvas, type, quality) {
+        const w = frameWorker();
+        if (w) {
+            try {
+                const bmp = await createImageBitmap(canvas);
+                const id = ++encodeSeq;
+                return await new Promise((resolve, reject) => {
+                    encodeWaiters.set(id, { resolve, reject });
+                    w.postMessage({ id, bmp, type, quality }, [bmp]);
+                });
+            } catch (e) { /* fall through to the main-thread encoder */ }
+        }
         return new Promise((resolve, reject) => {
             canvas.toBlob(b => b ? resolve(b) : reject(new Error('Canvas produced no image data.')), type, quality);
         });
@@ -1033,7 +1094,25 @@
      *
      * options: { canvas, config | preset, name, fps, duration, onUpdate }
      */
+    /**
+     * While an export runs, ForgeCut.__exporting is set, and
+     * MediaEngine.getRenderElement() then returns ORIGINAL media only, so a
+     * 540p proxy can never end up in a 4K master. Counted, not boolean, so
+     * overlapping exports cannot clear it early.
+     */
     async function runExport(appState, renderFn, options) {
+        const FC = (typeof window !== 'undefined') ? (window.ForgeCut = window.ForgeCut || {}) : {};
+        FC.__exportDepth = (FC.__exportDepth || 0) + 1;
+        FC.__exporting = true;
+        try {
+            return await runExportInner(appState, renderFn, options);
+        } finally {
+            FC.__exportDepth = Math.max(0, (FC.__exportDepth || 1) - 1);
+            FC.__exporting = FC.__exportDepth > 0;
+        }
+    }
+
+    async function runExportInner(appState, renderFn, options) {
         options = options || {};
         const ecfg = EC();
         const registry = CR();

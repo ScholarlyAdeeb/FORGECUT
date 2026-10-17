@@ -99,6 +99,21 @@ function updateInspector() {
                 <input type="range" id="insp_rot" min="0" max="360" value="${clip.rotation || 0}">
             </div>
         `;
+        const motionTracks = window.listMotionTracks ? window.listMotionTracks().filter(m => m.clipId !== clip.id) : [];
+        if (motionTracks.length || clip.pinnedTo) {
+            const escT = (v) => String(v).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]);
+            transformHtml += `
+            <div class="control-group">
+                <label>Follow Motion</label>
+                <div class="flex gap-1">
+                    <select id="insp_pin" data-history="self" class="w-full text-[11px] bg-surface-container border border-outline-variant/40 rounded px-1 py-0.5" onchange="if (this.value) pinToTrack('${clip.id}', this.value)">
+                        <option value="">${clip.pinnedTo ? 'Pinned' : 'Pin to a motion track…'}</option>
+                        ${motionTracks.map(m => `<option value="${escT(m.ref)}"${m.ref === clip.pinnedTo ? ' selected' : ''}>${escT(m.label)}</option>`).join('')}
+                    </select>
+                    ${clip.pinnedTo ? `<button class="py-1 px-2 rounded text-[10px] whitespace-nowrap bg-surface-container border-none cursor-pointer text-on-surface hover:bg-surface-container-high" onclick="unpinClip('${clip.id}')">Unpin</button>` : ''}
+                </div>
+            </div>`;
+        }
     }
 
     // Appearance properties
@@ -149,8 +164,15 @@ function updateInspector() {
                     <input type="range" id="insp_hue" min="0" max="360" value="${clip.hue || 0}">
                 </div>
                 <div class="control-group">
-                    <label>${kf('playbackSpeed')} Playback Speed</label>
-                    <input type="range" id="insp_playback_speed" min="25" max="400" value="${Math.round((clip.playbackSpeed || 1.0) * 100)}">
+                    <label>${kf('playbackSpeed')} Playback Speed<span class="control-value" data-value-for="insp_playback_speed">${Math.round((clip.playbackSpeed || 1.0) * 100)}</span></label>
+                    <input type="range" id="insp_playback_speed" min="25" max="400" value="${Math.round((clip.playbackSpeed || 1.0) * 100)}"${clip.keyframes && clip.keyframes.playbackSpeed ? ' disabled title="Speed follows the ramp; set the ramp to None to use a constant speed"' : ''}>
+                </div>
+                <div class="control-group">
+                    <label>Speed Ramp</label>
+                    <select id="insp_speed_ramp" data-history="self" class="w-full text-[11px] bg-surface-container border border-outline-variant/40 rounded px-1 py-0.5" onchange="applySpeedRamp('${clip.id}', this.value)">
+                        ${(window.ForgeCut && window.ForgeCut.TimeMap ? Object.entries(window.ForgeCut.TimeMap.PRESETS) : []).map(([k, p]) =>
+                            `<option value="${k}"${(clip.speedRamp || 'none') === k ? ' selected' : ''}>${p.label}</option>`).join('')}
+                    </select>
                 </div>
             `;
         }
@@ -404,6 +426,11 @@ function updateInspector() {
                         onchange="fxSetParam('${clip.id}','${fx.id}','${name}',this.value,'commit')">
                 </div>`;
             }).join('');
+            const motion = fx.type === 'mask' ? `
+                <div class="flex items-center justify-between gap-1 text-[10px] text-on-surface-variant">
+                    <span>${clip.motionTracks && clip.motionTracks[fx.id] ? `Tracked (${clip.motionTracks[fx.id].points.length} frames)` : 'Place the mask over the subject, then track.'}</span>
+                    <button class="py-1 px-2 rounded text-[10px] whitespace-nowrap bg-surface-container border-none cursor-pointer text-on-surface hover:bg-surface-container-high" onclick="trackMask('${clip.id}','${fx.id}')" title="Follow the region under this mask through the clip">Track Motion</button>
+                </div>` : '';
             return `
             <div class="border border-outline-variant/30 rounded p-2 flex flex-col gap-1.5${fx.enabled ? '' : ' opacity-50'}">
                 <div class="flex items-center gap-1 text-[11px]">
@@ -414,6 +441,7 @@ function updateInspector() {
                     <button class="material-symbols-outlined text-sm text-on-surface-variant hover:text-error bg-transparent border-none" title="Remove" onclick="fxRemove('${clip.id}','${fx.id}')">delete</button>
                 </div>
                 ${params}
+                ${motion}
             </div>`;
         }).join('');
         const options = Object.entries(FXE.EFFECTS).map(([k, d]) => `<option value="${k}">${esc(d.label)}</option>`).join('');
@@ -656,6 +684,13 @@ function updateInspector() {
             }
         });
     };
+
+    const speedEl = document.getElementById('insp_playback_speed');
+    if (speedEl && window.setClipSpeed) {
+        // Speed changes the linked audio too, so it goes through the shared
+        // command rather than bindInput's single-clip write.
+        speedEl.addEventListener('input', () => window.setClipSpeed(clip.id, parseFloat(speedEl.value) / 100));
+    }
 
     bindInput('insp_x', 'x', 1, false);
     bindInput('insp_y', 'y', 1, false);

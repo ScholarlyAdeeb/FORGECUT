@@ -14,6 +14,9 @@
     'use strict';
 
     const EPS = 1e-6;
+    // Timeline→source mapping (speed ramps included), shared with playback and export.
+    const TM = () => (typeof window !== 'undefined' && window.ForgeCut && window.ForgeCut.TimeMap) ||
+        (typeof require === 'function' ? require('./TimeMap.js') : null);
 
     // ── Silence detection ────────────────────────────────────────────────
 
@@ -156,7 +159,6 @@
         }
         if (start >= ce - EPS) return [cloneClip(clip)];   // entirely before
 
-        const speed = clip.playbackSpeed || 1;
         const pieces = [];
         if (start > cs + EPS) {
             const head = cloneClip(clip);
@@ -170,7 +172,7 @@
             tail.id = pieces.length ? makeId(clip.id) : clip.id;
             tail.startTime = start;                          // rippled: lands where the cut began
             tail.duration = ce - end;
-            tail.trimStart = (clip.trimStart || 0) + offset * speed;
+            tail.trimStart = TM() ? TM().sourceTime(clip, offset) : (clip.trimStart || 0) + offset * (clip.playbackSpeed || 1);
             if (tail.keyframes) {
                 for (const k of Object.keys(tail.keyframes)) {
                     tail.keyframes[k].forEach(f => { f.time -= offset; });

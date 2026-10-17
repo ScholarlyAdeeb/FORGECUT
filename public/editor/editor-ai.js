@@ -339,13 +339,16 @@
                 v.addEventListener('seeked', done);
                 v.currentTime = t;
             });
+            const TMr = window.ForgeCut && window.ForgeCut.TimeMap;
             const speed = clip.playbackSpeed || 1;
             const from = clip.trimStart || 0;
             const step = 1 / o.rate;
             const samples = [];
             let prevGrey = null, prev = null, faces = 0;
-            for (let local = 0; local <= clip.duration + 1e-6; local += step) {
-                const src = Math.min(from + local * speed, (v.duration || Infinity) - 0.01);
+            // Integer index, not local += step: accumulated float error lands
+            // just before frame boundaries and samples the previous frame.
+            for (let n = 0, local = 0; local <= clip.duration + 1e-6; n++, local = n * step) {
+                const src = Math.min(TMr ? TMr.sourceTime(clip, local) : from + local * speed, (v.duration || Infinity) - 0.01);
                 await seek(src);
                 dctx.drawImage(v, 0, 0, dw, dh);
                 let subject = null;

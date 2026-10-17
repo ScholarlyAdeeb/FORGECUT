@@ -461,11 +461,24 @@
     // Initialize worker on load
     initWorker();
 
+    /**
+     * The element to DRAW for an asset: its proxy while proxies are on and no
+     * export is running, otherwise the original. Export never sees a proxy.
+     */
+    function getRenderElement(asset) {
+        if (!asset) return null;
+        const FC = window.ForgeCut || {};
+        const useProxy = !!(window.state && window.state.useProxies) && !FC.__exporting &&
+            asset.proxy && asset.proxy.ready && asset.proxy.element;
+        return useProxy ? asset.proxy.element : asset.element;
+    }
+
     // Export
     window.ForgeCut = window.ForgeCut || {};
     window.ForgeCut.MediaEngine = {
         importFile,
         getAsset,
+        getRenderElement,
         removeAsset,
         getAllAssets,
         getAssetsByType,

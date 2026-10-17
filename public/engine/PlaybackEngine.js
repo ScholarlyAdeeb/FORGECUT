@@ -220,18 +220,38 @@
 
                 const clipEnd = clip.startTime + clip.duration;
                 const inRange = _state.currentTime >= clip.startTime && _state.currentTime < clipEnd;
-                const element = asset.element;
+                // With proxies on, the proxy is what is drawn, so it is what
+                // must play and seek; the original stays paused.
+                const element = (ME && ME.getRenderElement) ? ME.getRenderElement(asset) : asset.element;
+                if (element !== asset.element && !asset.element.paused) asset.element.pause();
+                if (asset.proxy && asset.proxy.element && element === asset.element && !asset.proxy.element.paused) asset.proxy.element.pause();
 
                 if (inRange) {
-                    const localTime = (_state.currentTime - clip.startTime) + (clip.trimStart || 0);
+                    // Source position and instantaneous speed both come from
+                    // TimeMap, the same mapping export and the audio mix use.
+                    // (This used to seek as if speed were 1 while playing at
+                    // playbackRate = speed, so a 2x clip was re-seeked as
+                    // "drifted" every frame and scrubbing showed a different
+                    // frame from the export.)
+                    const TM = window.ForgeCut && window.ForgeCut.TimeMap;
+                    const clipLocal = _state.currentTime - clip.startTime;
+                    const localTime = TM ? TM.sourceTime(clip, clipLocal) : clipLocal + (clip.trimStart || 0);
+                    const speed = TM ? TM.speedAt(clip, clipLocal) : (clip.playbackSpeed !== undefined ? clip.playbackSpeed : 1.0);
+                    // Proxies (WebM, millisecond timestamps) are seeked to the
+                    // middle of the frame; see ProxyEngine.attach.
+                    const seekTime = element.__fcProxyFps ? localTime + 0.5 / element.__fcProxyFps : localTime;
 
                     if (_state.isPlaying) {
-                        element.playbackRate = _playbackRate * (clip.playbackSpeed !== undefined ? clip.playbackSpeed : 1.0);
+                        // Browsers accept 0.0625..16.
+                        element.playbackRate = Math.min(16, Math.max(0.0625, _playbackRate * speed));
+                        // Export changes pitch with speed (tape-style), so the
+                        // preview must too or the two would sound different.
+                        if ('preservesPitch' in element) element.preservesPitch = speed === 1;
                         if (element.paused) {
-                            element.currentTime = localTime;
+                            element.currentTime = seekTime;
                             element.play().catch(() => {});
-                        } else if (Math.abs(element.currentTime - localTime) > DRIFT_THRESHOLD) {
-                            element.currentTime = localTime;
+                        } else if (Math.abs(element.currentTime - seekTime) > DRIFT_THRESHOLD) {
+                            element.currentTime = seekTime;
                         }
 
                         // Audio volume with fades, keyframes, ducking and censor beeps
@@ -269,7 +289,7 @@
                         }
                     } else {
                         if (!element.paused) element.pause();
-                        element.currentTime = localTime;
+                        element.currentTime = seekTime;
                     }
                 } else {
                     if (!element.paused) element.pause();

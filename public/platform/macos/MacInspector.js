@@ -144,6 +144,24 @@
                 b.append(numberField('Trim In', () => (clip.trimStart || 0).toFixed(2),
                     v => { clip.trimStart = Math.max(0, v); }, { step: '0.1' }));
             }
+            const TMp = window.ForgeCut && window.ForgeCut.TimeMap;
+            if (TMp && (kind === 'video' || kind === 'audio')) {
+                const ramped = !!(clip.keyframes && clip.keyframes.playbackSpeed);
+                const sp = rangeField('Speed', () => Math.round((clip.playbackSpeed || 1) * 100),
+                    v => window.setClipSpeed(clip.id, v / 100), 25, 400, v => Math.round(v) + '%');
+                const spInput = sp.querySelector('input');
+                if (ramped && spInput) { spInput.disabled = true; spInput.title = 'Speed follows the ramp'; }
+                b.append(sp);
+                const ramp = el('select', 'mac-select');
+                ramp.dataset.history = 'self';      // applySpeedRamp records its own undo step
+                Object.entries(TMp.PRESETS).forEach(([k, p]) => {
+                    const o = el('option', null, p.label); o.value = k;
+                    if ((clip.speedRamp || 'none') === k) o.selected = true;
+                    ramp.append(o);
+                });
+                ramp.addEventListener('change', () => window.applySpeedRamp(clip.id, ramp.value));
+                b.append(field('Ramp', ramp));
+            }
         }));
 
         /* Transform — visual tracks only, matching what the renderer reads. */
@@ -156,6 +174,23 @@
                 if (clip.scale !== undefined) {
                     b.append(rangeField('Scale', () => Math.round((clip.scale || 1) * 100),
                         v => { clip.scale = v / 100; }, 10, 300, v => Math.round(v) + '%'));
+                }
+                const tracks = window.listMotionTracks ? window.listMotionTracks().filter(m => m.clipId !== clip.id) : [];
+                if (tracks.length || clip.pinnedTo) {
+                    const pin = el('select', 'mac-select');
+                    pin.dataset.history = 'self';    // pinToTrack records its own undo step
+                    const first = el('option', null, clip.pinnedTo ? 'Pinned' : 'Pin to Track…'); first.value = '';
+                    pin.append(first);
+                    tracks.forEach(m => { const o = el('option', null, m.label); o.value = m.ref; if (m.ref === clip.pinnedTo) o.selected = true; pin.append(o); });
+                    pin.addEventListener('change', () => { if (pin.value) window.pinToTrack(clip.id, pin.value); });
+                    const row = el('div', 'mac-row2');
+                    row.append(pin);
+                    if (clip.pinnedTo) {
+                        const un = el('button', 'mac-btn', 'Unpin'); un.type = 'button';
+                        un.addEventListener('click', () => window.unpinClip(clip.id));
+                        row.append(un);
+                    }
+                    b.append(field('Follow', row));
                 }
                 const align = el('button', 'mac-btn', 'Centre on Canvas');
                 align.type = 'button';
@@ -279,6 +314,14 @@
                             ctl.append(input, val, kfb);
                             card.append(field(spec.label, ctl));
                         });
+                    }
+                    if (fx.type === 'mask') {
+                        const tracked = clip.motionTracks && clip.motionTracks[fx.id];
+                        const btn = el('button', 'mac-btn', 'Track Motion');
+                        btn.type = 'button';
+                        btn.title = 'Follow the region under this mask through the clip';
+                        btn.addEventListener('click', () => window.trackMask(clip.id, fx.id));
+                        card.append(field(tracked ? `${tracked.points.length} frames` : 'Motion', btn));
                     }
                     b.append(card);
                 });

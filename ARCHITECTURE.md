@@ -62,6 +62,10 @@ platform reaches into another. Run it before committing UI work.
 | `SmartEdit.js`, `Captions.js`, `Reframe.js` | none | pure: silence, scenes, captions, reframe maths |
 | `Luts.js` | none | pure: .cube parsing, 1D→3D, domain resampling, project packing |
 | `Scopes.js` | none | pure: histogram, waveform, vectorscope maths |
+| `TimeMap.js` | none | pure: THE timeline→source mapping, keyframe interpolation, speed ramps |
+| `Tracker.js` | none | pure: ZNCC template-matching motion tracker |
+| `Mp4Demux.js` | none | pure: streaming MP4 demux (H.264/HEVC) for sequential decoding |
+| `ProxyEngine.js` | video / WebCodecs / OPFS | builds and caches 540p proxies |
 
 None of these reference a platform's DOM. `PlaybackEngine` used to write
 directly into the Ribbon's transport icons; it now emits:
@@ -126,6 +130,33 @@ A video or image clip may carry `clip.effects`, an ordered stack:
 - **Adding an effect** = an entry in `Effects.EFFECTS`, a reference function,
   a shader pass in `Compositor.js`, and a self-test case. Both inspectors build
   their controls from the param schema, so no UI work is needed per effect.
+
+## Time, speed and proxies
+
+- **One timeline→source mapping.** `TimeMap.sourceTime(clip, t)` =
+  `trimStart + ∫₀ᵗ speed`, exact per segment (including eased segments, by
+  closed-form antiderivatives). Playback, export seeking, the offline audio
+  mix (`playbackRate` automation from `TimeMap.rateSchedule`), split/cut,
+  scene mapping, reframe and tracking all call it. Constant speed is the
+  flat-ramp special case, property-tested to be identical. Keyframe
+  interpolation (with `ease`: linear, smooth, easeIn, easeOut) lives here too,
+  and `getInterpolatedValue` delegates to it.
+- **Preview pitch matches export.** Speed changes pitch in the export mix
+  (tape-style), so preview media elements set `preservesPitch = false`.
+- **Seeks aim inside a frame.** Every frame-accurate seek adds 0.1 ms, because
+  computed times land a hair before frame boundaries (0.49999998 for 0.5).
+  Proxies (WebM, millisecond timestamps) are seeked to the middle of the
+  frame instead.
+- **Proxies never reach export.** `MediaEngine.getRenderElement()` returns a
+  proxy only while `state.useProxies` is on and `ForgeCut.__exporting` is
+  not; `runExport` sets that flag for its whole duration. Proxies are built
+  by decoding the MP4 sequentially with WebCodecs (one decode per frame) and
+  fall back to per-frame seeking for files the demuxer does not handle.
+  They are cached in OPFS keyed by name, size and modified time.
+- **Motion tracks** live on the clip (`clip.motionTracks[maskEffectId]`,
+  normalised source coordinates) and are written out as mask-centre
+  keyframes; pinning converts them through the tracked clip's own
+  position/scale/rotation/crop into x/y keyframes on another clip.
 
 ## Windows — `public/platform/windows/`
 

@@ -136,6 +136,7 @@
                 { label: 'Show Sidebar', checked: !document.getElementById('macBody').classList.contains('no-sidebar'), shortcut: '⌥⌘S', action: toggleSidebar },
                 { label: 'Show Inspector', checked: !document.getElementById('macBody').classList.contains('no-inspector'), shortcut: '⌥⌘I', action: toggleInspector },
                 { label: 'Show Video Scopes', checked: scopesVisible(), action: () => toggleScopes() },
+                { label: 'Use Proxy Media', checked: !!(window.state && state.useProxies), action: () => call('setUseProxies', !(window.state && state.useProxies)) },
                 'separator',
                 { label: 'Zoom In Timeline', shortcut: '⌘+', action: () => Mac.timeline.setZoom(Mac.timeline.getZoom() * 1.25) },
                 { label: 'Zoom Out Timeline', shortcut: '⌘−', action: () => Mac.timeline.setZoom(Mac.timeline.getZoom() * 0.8) },

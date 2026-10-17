@@ -315,7 +315,20 @@
                         lastNode.connect(offlineCtx.destination);
 
                         const trimStart = clip.trimStart || 0;
-                        source.start(clip.startTime, trimStart, clip.duration);
+                        // Speed (constant or ramped) as playbackRate automation,
+                        // from the same TimeMap the video uses. This mix used to
+                        // ignore speed entirely, so a 2x clip's audio exported
+                        // at 1x and drifted out of sync with its picture.
+                        const TM = window.ForgeCut && window.ForgeCut.TimeMap;
+                        if (TM) {
+                            const sched = TM.rateSchedule(clip);
+                            source.playbackRate.setValueAtTime(sched[0].rate, clip.startTime);
+                            for (let i = 1; i < sched.length; i++) {
+                                source.playbackRate.linearRampToValueAtTime(sched[i].rate, clip.startTime + sched[i].time);
+                            }
+                        }
+                        source.start(clip.startTime, trimStart);
+                        source.stop(clip.startTime + clip.duration);
 
                         // Censor beep oscillators in offline render
                         if (clip.censorBeeps) {

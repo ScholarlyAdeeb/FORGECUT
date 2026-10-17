@@ -289,8 +289,12 @@
             return clip[propertyName] !== undefined ? clip[propertyName] : defaultValue;
         }
 
-        const keyframes = [...clip.keyframes[propertyName]].sort((a, b) => a.time - b.time);
         const clipLocalTime = state.currentTime - clip.startTime;
+        // One definition of interpolation (including eased keyframes), shared
+        // with the speed integral in engine/TimeMap.js.
+        const TM = window.ForgeCut && window.ForgeCut.TimeMap;
+        if (TM) return TM.interpolate(clip.keyframes[propertyName], clipLocalTime, defaultValue);
+        const keyframes = [...clip.keyframes[propertyName]].sort((a, b) => a.time - b.time);
 
         if (clipLocalTime <= keyframes[0].time) return keyframes[0].value;
         if (clipLocalTime >= keyframes[keyframes.length - 1].time) return keyframes[keyframes.length - 1].value;

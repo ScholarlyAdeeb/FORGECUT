@@ -157,7 +157,7 @@
         let prev = null;
         const step = 1 / (rate || 5);
         const stop = Math.min(to, v.duration || to);
-        for (let t = from; t < stop; t += step) {
+        for (let n = 0, t = from; t < stop; n++, t = from + n * step) {
             await seek(t);
             g.drawImage(v, 0, 0, W, H);
             const cur = g.getImageData(0, 0, W, H).data;
@@ -192,9 +192,10 @@
         busy = true;
         try {
             fcToast('Detecting scene changes…');
+            const TM = window.ForgeCut && window.ForgeCut.TimeMap;
             const speed = clip.playbackSpeed || 1;
             const srcFrom = clip.trimStart || 0;
-            const srcTo = srcFrom + clip.duration * speed;
+            const srcTo = TM ? TM.sourceTime(clip, clip.duration) : srcFrom + clip.duration * speed;
 
             let cuts = asset.file ? await scenesFromServer(asset.file, threshold) : null;
             if (cuts === null) {
@@ -202,7 +203,9 @@
             }
             // Source seconds → timeline seconds, keeping only this clip's span.
             const onTimeline = SE().dedupeCuts(
-                cuts.filter(s => s > srcFrom && s < srcTo).map(s => (s - srcFrom) / speed),
+                cuts.filter(s => s > srcFrom && s < srcTo)
+                    .map(s => TM ? TM.localTimeForSource(clip, s) : (s - srcFrom) / speed)
+                    .filter(t => t != null),
                 0.5, clip.duration
             ).map(t => clip.startTime + t);
 

@@ -104,6 +104,8 @@ All of these run in the browser, so they work on a static deployment with no ser
 
 On macOS all of these are in the Clip menu.
 
+**Motion and speed** (Phase 5): speed ramps with eased presets (Hero, Bullet, Montage…) that keep picture and audio in sync; Track Motion on any Mask, then pin text, shapes or images to the tracked subject (Transform › Follow Motion); and proxy editing for 4K (View › Proxies), which previews from cached 540p copies while exports always use the originals.
+
 **Colour and compositing** (clip inspector › Effect Stack; GPU, with a CPU fallback): Color Grade, Selective Color, `.cube` LUTs, Chroma Key with spill suppression, feathered Masks, AI Remove Background, plus Adjust, Blur, Vignette and more. Clips have blend modes (Appearance › Blend), and View › Scopes shows a waveform, vectorscope and histogram.
 
 ---

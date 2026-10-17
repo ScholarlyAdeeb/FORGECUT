@@ -96,6 +96,12 @@ function renderCanvasComposition() {
 
                 if (asset && asset.element) {
                     const el = asset.element;
+                    // What to draw: a proxy while editing with proxies on,
+                    // never during export. Geometry always comes from the
+                    // ORIGINAL (`el`), and the proxy is scaled into it.
+                    const drawEl = (window.ForgeCut.MediaEngine && window.ForgeCut.MediaEngine.getRenderElement)
+                        ? window.ForgeCut.MediaEngine.getRenderElement(asset) : el;
+                    const proxyK = drawEl !== el && el.videoWidth ? (drawEl.videoWidth || 1) / el.videoWidth : 1;
                     const x = (clip.x !== undefined ? clip.x : canvas.width / 2) + animProps.offsetX;
                     const y = (clip.y !== undefined ? clip.y : canvas.height / 2) + animProps.offsetY;
                     const scale = (clip.scale !== undefined ? clip.scale : 1.0) * animProps.scale;
@@ -119,13 +125,16 @@ function renderCanvasComposition() {
                         // drawImage still draws) its last frame. Gating on
                         // readyState alone made effects flicker off on each
                         // scrub or undo, so remember that a frame existed.
-                        if (el.tagName === 'VIDEO' && el.readyState >= 2) el.__fcHasFrame = true;
-                        let src = el;
+                        if (drawEl.tagName === 'VIDEO' && drawEl.readyState >= 2) drawEl.__fcHasFrame = true;
+                        let src = drawEl;
                         if (clip.effects && clip.effects.length && window.ForgeCut.Effects && window.ForgeCut.Compositor &&
-                            !(el.tagName === 'VIDEO' && !el.__fcHasFrame)) {
+                            !(drawEl.tagName === 'VIDEO' && !drawEl.__fcHasFrame)) {
                             const stack = window.ForgeCut.Effects.resolveStack(clip.effects,
                                 (key, base) => window.getInterpolatedValue(clip, key, base), window.fxResources);
-                            if (stack.length) src = window.ForgeCut.Compositor.process(el, stack);
+                            // Pixel-sized params (blur radius) are in ORIGINAL
+                            // pixels; scale them to the proxy so the look matches.
+                            if (proxyK !== 1) stack.forEach(fx => { if (fx.type === 'blur') fx.params.radius *= proxyK; });
+                            if (stack.length) src = window.ForgeCut.Compositor.process(drawEl, stack);
                         }
 
                         if (transProgress.active && window.ForgeCut.TransitionEngine) {
@@ -151,9 +160,9 @@ function renderCanvasComposition() {
                             toCtx.rotate(rotation * Math.PI / 180);
                             toCtx.scale(scale, scale);
                             if (clip.cropX !== undefined && clip.cropY !== undefined && clip.cropW !== undefined && clip.cropH !== undefined) {
-                                toCtx.drawImage(src, clip.cropX, clip.cropY, clip.cropW, clip.cropH, -clip.cropW / 2, -clip.cropH / 2, clip.cropW, clip.cropH);
+                                toCtx.drawImage(src, clip.cropX * proxyK, clip.cropY * proxyK, clip.cropW * proxyK, clip.cropH * proxyK, -clip.cropW / 2, -clip.cropH / 2, clip.cropW, clip.cropH);
                             } else {
-                                toCtx.drawImage(src, -width / 2, -height / 2);
+                                toCtx.drawImage(src, -width / 2, -height / 2, width, height);
                             }
                             toCtx.restore();
 
@@ -180,9 +189,9 @@ function renderCanvasComposition() {
                             ctx.filter = `blur(${blurVal}px) brightness(${brightnessVal}) contrast(${contrastVal}) saturate(${saturationVal}) hue-rotate(${hueVal}deg)`;
 
                             if (clip.cropX !== undefined && clip.cropY !== undefined && clip.cropW !== undefined && clip.cropH !== undefined) {
-                                ctx.drawImage(src, clip.cropX, clip.cropY, clip.cropW, clip.cropH, -clip.cropW / 2, -clip.cropH / 2, clip.cropW, clip.cropH);
+                                ctx.drawImage(src, clip.cropX * proxyK, clip.cropY * proxyK, clip.cropW * proxyK, clip.cropH * proxyK, -clip.cropW / 2, -clip.cropH / 2, clip.cropW, clip.cropH);
                             } else {
-                                ctx.drawImage(src, -width / 2, -height / 2);
+                                ctx.drawImage(src, -width / 2, -height / 2, width, height);
                             }
                             ctx.filter = 'none';
                         }
