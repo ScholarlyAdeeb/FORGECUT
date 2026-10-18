@@ -3,7 +3,6 @@
 const { test, expect } = require('@playwright/test');
 
 const stagingUrl = process.env.FORGECUT_STAGING_URL;
-test.skip(!stagingUrl, 'Set FORGECUT_STAGING_URL to the staging origin before running cloud QA.');
 
 const routes = [
   {
@@ -22,6 +21,8 @@ const routes = [
 
 for (const route of routes) {
   test(`${route.name} boots on staging`, async ({ page, baseURL }, testInfo) => {
+    test.skip(!stagingUrl, 'Set FORGECUT_STAGING_URL to the staging origin before running cloud QA.');
+
     const pageErrors = [];
     const sameOriginFailures = [];
     const consoleErrors = [];
