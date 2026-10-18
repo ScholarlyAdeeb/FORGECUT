@@ -1,0 +1,57 @@
+name: ForgeCut Cloud QA
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "30 2 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: forgecut-cloud-qa
+  cancel-in-progress: false
+
+jobs:
+  staging-audit:
+    name: Read-only staging browser audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout QA definitions
+        uses: actions/checkout@v4
+
+      - name: Require staging URL
+        env:
+          FORGECUT_STAGING_URL: ${{ secrets.FORGECUT_STAGING_URL }}
+        run: |
+          if [ -z "$FORGECUT_STAGING_URL" ]; then
+            echo "::error::Add FORGECUT_STAGING_URL in repository Actions secrets."
+            exit 1
+          fi
+          node -e "const u=new URL(process.env.FORGECUT_STAGING_URL); if (!['https:','http:'].includes(u.protocol) || u.pathname !== '/' || u.search || u.hash) process.exit(1)"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install browser test runner
+        run: |
+          npm install --no-save --package-lock=false @playwright/test
+          npx playwright install --with-deps chromium
+
+      - name: Run staging audit
+        env:
+          FORGECUT_STAGING_URL: ${{ secrets.FORGECUT_STAGING_URL }}
+          CI: "true"
+        run: npx playwright test --config=qa/playwright.config.cjs
+
+      - name: Upload QA evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: forgecut-qa-report
+          path: qa-results/
+          if-no-files-found: warn
+          retention-days: 14
